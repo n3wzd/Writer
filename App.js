@@ -21,30 +21,34 @@ function CenterTitle() {
 }
 
 function CenterContent() {
-	const [content, setContent] = useState('');
-	const divHTMLRef = useRef();
-
-	useEffect(() => {
-		if (divHTMLRef.current) {
-			divHTMLRef.current.innerText = content;
-		}
-	}, [content]);
+	const divEditorRef = useRef();
+	let markList = [];
 	
 	const handleInputChange = (event) => {
-		const newText = event.target.innerText;
-		setContent(createHTMLByTextContent(newText));
+		const text = event.target.innerText;
+		console.log(event.target.innerText);
+		console.log(event.target.innerHTML);
+		return;
+		const searchedMarkList = createRangeMarkList(text);
+		if(!compareRangeMarkList(markList, searchedMarkList)) {
+			const rootMarkNode = createMarkTree(searchedMarkList, text);
+			const rootDOMNode = divEditorRef.current;
+			rootDOMNode.setAttribute("textHi", text.length);
+			markList = searchedMarkList;
+			applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
+		}
 	};
-
+	
 	return (
 		<>
 			<div
+				ref={divEditorRef}
 				contentEditable={true}
 				onInput={handleInputChange}
 				style={{ border: '1px solid #ccc', padding: '8px' }}
+				textLo='0'
+				textHi='1'
 			/>
-			<div>
-				{content}
-			</div>
 		</>
 	);
 }
@@ -69,10 +73,10 @@ function convertPatternToTag(pattern) {
 		case '**': 
 		case '_': return 'b';
 		case '*': 
-		case '__': return 'i';
+		case '__': return 'em';
 		case '~~': return 's';
 		// case '`': return 'b';
-		case 'p': return 'p';
+		case 'p': return 'span';
 		case 'br': return 'br';
 		default: return 'span';
 	}
@@ -88,6 +92,10 @@ class MarkTreeNode {
 	
 	pushChild(child) {
 		this.children.push(child);
+	}
+	
+	get tag() {
+		return convertPatternToTag(this.pattern);
 	}
 	
 	get isChildrenEmpty() {
@@ -117,6 +125,7 @@ class MarkTreeNode {
 			default: return '';
 		}
 	}
+	
 	get rightPattern() {
 		switch(this.pattern) {
 			case '# ': 
@@ -137,18 +146,23 @@ class MarkTreeNode {
 	}
 }
 
+class MarkElement {
+	constructor(lo, hi, pattern) {
+		this.lo = lo;
+		this.hi = hi;
+		this.pattern = pattern;
+	}
+	
+	static equal(a, b) {
+		return a.lo === b.lo && a.hi === b.hi && a.pattern === b.pattern;
+	}
+}
+
 function createRangeMarkList(textContent) {
 	const searchedMarkList = [];
 	class SingleMarkElement {
 		constructor(pos, pattern) {
 			this.pos = pos;
-			this.pattern = pattern;
-		}
-	}
-	class MarkElement {
-		constructor(lo, hi, pattern) {
-			this.lo = lo;
-			this.hi = hi;
 			this.pattern = pattern;
 		}
 	}
@@ -217,10 +231,10 @@ function createRangeMarkList(textContent) {
 	}
 	
 	const lines = textContent.split('\n');
-	const singleMarkCodeBlockStack = [];
-	const lineBrStack = [];
+	//const singleMarkCodeBlockStack = [];
+	//const lineBrStack = [];
 	let lineOffset = 0;
-	function unleashBrStack() {
+	/*function unleashBrStack() {
 		const length = lineBrStack.length;
 		for(let i = 1; i < length; i++) {
 			searchedMarkList.push(
@@ -241,18 +255,18 @@ function createRangeMarkList(textContent) {
 			);
 		}
 		lineBrStack.length = 0;
-	}
+	}*/
 	
 	for (const line of lines) {
-		if(line.length === 0) {
+		/*if(line.length === 0) {
 			unleashBrStack();
 			lineOffset += 1;
 			continue;
-		}
+		}*/
 		
 		let patternMatched = false;
 		let skipPos = 0;
-		if(patternOnlyLine.length === line.length) {
+		/*if(patternOnlyLine.length === line.length) {
 			const lineSeg = line.substring(0, patternOnlyLine.length);
 			if(patternOnlyLine === lineSeg) {
 				searchedMarkList.push(
@@ -284,7 +298,7 @@ function createRangeMarkList(textContent) {
 				patternMatched = true;
 				skipPos += line.length;
 			}
-		}
+		}*/
 		
 		for(const pattern of patternTitleList) {
 			const patternLength = pattern.length;
@@ -307,22 +321,22 @@ function createRangeMarkList(textContent) {
 		}
 		
 		scanLine(line, lineOffset, skipPos);
-		if(patternMatched) {
+		/*if(patternMatched) {
 			unleashBrStack();
 		} else {
 			lineBrStack.push(new Range(lineOffset, lineOffset + line.length));
-		}
+		}*/
 		lineOffset += line.length + 1;
 	}
-	unleashBrStack();
+	// unleashBrStack();
 	
-	searchedMarkList.sort((x, y) => x.lo !== y.lo ? x.lo - y.lo : (x.pattern === 'p' ? -1 : 1));
+	// searchedMarkList.sort((x, y) => x.lo !== y.lo ? x.lo - y.lo : (x.pattern === 'p' ? -1 : 1));
+	searchedMarkList.sort((x, y) => x.lo - y.lo);
 	return searchedMarkList;
 }
 
-function createMarkTree(textContent) {
-	const searchedMarkList = createRangeMarkList(textContent);
-	const rootNode = new MarkTreeNode(0, textContent.length, 'div');
+function createMarkTree(searchedMarkList, text) {
+	const rootNode = new MarkTreeNode(0, text.length, 'div');
 	const nodeStack = [];
 	
 	let curNode = rootNode;
@@ -339,38 +353,17 @@ function createMarkTree(textContent) {
 	return rootNode;
 }
 
+function compareRangeMarkList(a, b) {
+	let isEqual = a.length === b.length;
+	for (let i = 0; i < a.length; i++) {
+		isEqual = isEqual && MarkElement.equal(a[i], b[i]);
+	}
+	return isEqual;
+}
+
 function createHTMLByTree(rootNode, text) {
 	function scanTree(curNode) {
 		if(curNode.pattern === 'br') {
-			return React.createElement(convertPatternToTag(curNode.pattern));
-		}
-		
-		const children = [];
-		for(let i = 0; i < curNode.children.length; i++) {
-			if(i > 0) {
-				children.push(text.substring(curNode.children[i - 1].hi, curNode.children[i].lo));
-			}
-			children.push(scanTree(curNode.children[i]));
-		}
-		
-		const leftPattern = curNode.leftPattern;
-		const rightPattern = curNode.rightPattern;
-		let leftTextTag = '', rightTextTag = '';
-		if(curNode.isChildrenEmpty) {
-			children.push(text.substring(curNode.lo + leftPattern.length, curNode.hi - rightPattern.length));
-		} else {
-			leftTextTag = text.substring(curNode.lo + leftPattern.length, curNode.leftmostChildTagPos);
-			rightTextTag = text.substring(curNode.rightmostChildTagPos, curNode.hi - rightPattern.length);
-		}
-		return React.createElement(convertPatternToTag(curNode.pattern), null, [leftTextTag].concat(children, [rightTextTag]));
-	}
-	return scanTree(rootNode);
-}
-
-// Not Complete
-function createEditorTextByTree(rootNode, text) {
-	function scanTree(curNode) {
-		if(curNode.tag === 'br') {
 			return React.createElement(curNode.tag);
 		}
 		
@@ -381,24 +374,82 @@ function createEditorTextByTree(rootNode, text) {
 			}
 			children.push(scanTree(curNode.children[i]));
 		}
-		if(curNode.isChildrenEmpty) {
-			children.push(text.substring(curNode.lo, curNode.hi));
-		}
 		
 		const leftPattern = curNode.leftPattern;
 		const rightPattern = curNode.rightPattern;
-		const leftTextTag = text.substring(curNode.lo, curNode.leftmostChildTagPos);
-		const rightTextTag = text.substring(curNode.rightmostChildTagPos, curNode.hi);
-		const leftPatternTag = React.createElement('b', null, leftPattern);
-		const rightPatternTag = React.createElement('b', null, rightPattern);
-		return React.createElement(convertPatternToTag(curNode.tag), null, [leftPatternTag, leftTextTag].concat(children, [rightTextTag, rightPatternTag]));
+		const tagType = curNode.tag;
+		let leftTextTag = '', rightTextTag = '';
+		
+		if(curNode.isChildrenEmpty) {
+			children.push(text.substring(curNode.lo + leftPattern.length, curNode.hi - rightPattern.length));
+		} else {
+			leftTextTag = text.substring(curNode.lo + leftPattern.length, curNode.leftmostChildTagPos);
+			rightTextTag = text.substring(curNode.rightmostChildTagPos, curNode.hi - rightPattern.length);
+		}
+		return React.createElement(tagType, null, [leftTextTag].concat(children, [rightTextTag]));
 	}
 	return scanTree(rootNode);
 }
 
-function createHTMLByTextContent(text) {
-	const rootNode = createMarkTree(text);
-	const HTML = createHTMLByTree(rootNode, text);
-	const editorText = createEditorTextByTree(rootNode, text);
-	return HTML;
+function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
+	const cursorPosition = getCursorPosition(DOMRootNode);
+	let newCursorOffset = -1;
+	let newCursorNode;
+	
+	function createTextNode(lo, hi) {
+		const textNode = document.createTextNode(textContent.substring(lo, hi));
+		const wrapNode = document.createElement('span');
+		wrapNode.setAttribute("textLo", lo);
+		wrapNode.setAttribute("textHi", hi);
+		wrapNode.appendChild(textNode);
+		if(cursorPosition >= lo && cursorPosition <= hi) {
+			newCursorOffset = cursorPosition - lo;
+			newCursorNode = textNode;
+		}
+		return wrapNode;
+	}
+	
+	function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
+		for(const markChild of markNode.children) {
+			if(lo < markChild.lo) {
+				DOMnode.appendChild(createTextNode(lo, markChild.lo));
+			}
+			const childDOMNode = document.createElement(markChild.tag);
+			addDOMNodeByMarkTree(markChild, childDOMNode, markChild.lo, markChild.hi);
+			DOMnode.appendChild(childDOMNode);
+			lo = markChild.hi;
+		}
+		if(lo < hi) {
+			DOMnode.appendChild(createTextNode(lo, hi));
+		}
+	}
+	
+	deleteDOMChildren(DOMRootNode);
+	addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length);
+	setCursorPosition(newCursorNode, newCursorOffset);
+}
+
+function deleteDOMChildren(node) {
+	while (node.firstChild) {
+		deleteDOMChildren(node.firstChild);
+		node.removeChild(node.firstChild);
+	}
+}
+
+function getCursorPosition(DOMNode) {
+	const range = window.getSelection().getRangeAt(0);
+	return range.startOffset + parseInt(range.startContainer.parentNode.getAttribute('textLo'));
+}
+
+function setCursorPosition(targetNode, targetOffset) {
+	if(targetNode === undefined) {
+		return;
+	}
+	const range = document.createRange();
+	range.setStart(targetNode, targetOffset);
+	range.collapse(true);
+
+	const selection = window.getSelection();
+	selection.removeAllRanges();
+	selection.addRange(range);
 }
