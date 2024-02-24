@@ -22,19 +22,20 @@ function CenterTitle() {
 
 function CenterContent() {
 	const divEditorRef = useRef();
-	let markList = [];
 	
 	const handleInputChange = (event) => {
-		const text = event.target.innerText;
-		console.log(event.target.innerText);
-		console.log(event.target.innerHTML);
-		return;
-		const searchedMarkList = createRangeMarkList(text);
-		if(!compareRangeMarkList(markList, searchedMarkList)) {
+		let text = compatibleLineBreakToChrome(event.target.innerText);
+		if(text === '\n') {
+			if (event.nativeEvent.inputType === "deleteContentBackward" || event.nativeEvent.inputType === "deleteContentForward") {
+				deleteDOMChildren(divEditorRef.current);
+				return;
+			}
+		}
+		
+		if(true) {
+			const searchedMarkList = createRangeMarkList(text);
 			const rootMarkNode = createMarkTree(searchedMarkList, text);
 			const rootDOMNode = divEditorRef.current;
-			rootDOMNode.setAttribute("textHi", text.length);
-			markList = searchedMarkList;
 			applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
 		}
 	};
@@ -46,8 +47,6 @@ function CenterContent() {
 				contentEditable={true}
 				onInput={handleInputChange}
 				style={{ border: '1px solid #ccc', padding: '8px' }}
-				textLo='0'
-				textHi='1'
 			/>
 		</>
 	);
@@ -76,7 +75,7 @@ function convertPatternToTag(pattern) {
 		case '__': return 'em';
 		case '~~': return 's';
 		// case '`': return 'b';
-		case 'p': return 'span';
+		case 'div': return 'div';
 		case 'br': return 'br';
 		default: return 'span';
 	}
@@ -120,7 +119,7 @@ class MarkTreeNode {
 			case '*': 
 			case '__': 
 			case '~~': return this.pattern;
-			case 'p': 
+			case 'div': 
 			case 'br': 
 			default: return '';
 		}
@@ -139,7 +138,7 @@ class MarkTreeNode {
 			case '*': 
 			case '__': 
 			case '~~': return this.pattern;
-			case 'p': 
+			case 'div': 
 			case 'br': 
 			default: return '';
 		}
@@ -178,7 +177,6 @@ function createRangeMarkList(textContent) {
 		function findMatch(item) {
 			let matched = false;
 			let idx = singleMarkCharStack.length - 1;
-
 			while(idx >= 0) {
 				if(singleMarkCharStack[idx].pattern === item.pattern) {
 					matched = true;
@@ -186,7 +184,6 @@ function createRangeMarkList(textContent) {
 				}
 				idx--;
 			}
-
 			if(matched) {
 				searchedMarkList.push(
 					new MarkElement(
@@ -210,7 +207,6 @@ function createRangeMarkList(textContent) {
 					continue;
 				}
 			}
-			
 			for(const pattern of patternCharList) {
 				const patternLength = pattern.length;
 				if(i > line.length - pattern.length) {
@@ -231,39 +227,9 @@ function createRangeMarkList(textContent) {
 	}
 	
 	const lines = textContent.split('\n');
-	//const singleMarkCodeBlockStack = [];
-	//const lineBrStack = [];
 	let lineOffset = 0;
-	/*function unleashBrStack() {
-		const length = lineBrStack.length;
-		for(let i = 1; i < length; i++) {
-			searchedMarkList.push(
-				new MarkElement(
-					lineBrStack[i].lo - 1,
-					lineBrStack[i].lo,
-					'br'
-				)
-			);
-		}
-		if(length > 0) {
-			searchedMarkList.push(
-			new MarkElement(
-					lineBrStack[0].lo,
-					lineBrStack[length - 1].hi,
-					'p'
-				)
-			);
-		}
-		lineBrStack.length = 0;
-	}*/
 	
 	for (const line of lines) {
-		/*if(line.length === 0) {
-			unleashBrStack();
-			lineOffset += 1;
-			continue;
-		}*/
-		
 		let patternMatched = false;
 		let skipPos = 0;
 		/*if(patternOnlyLine.length === line.length) {
@@ -321,17 +287,10 @@ function createRangeMarkList(textContent) {
 		}
 		
 		scanLine(line, lineOffset, skipPos);
-		/*if(patternMatched) {
-			unleashBrStack();
-		} else {
-			lineBrStack.push(new Range(lineOffset, lineOffset + line.length));
-		}*/
+		searchedMarkList.push(new MarkElement(lineOffset, lineOffset + line.length, 'div'));
 		lineOffset += line.length + 1;
 	}
-	// unleashBrStack();
-	
-	// searchedMarkList.sort((x, y) => x.lo !== y.lo ? x.lo - y.lo : (x.pattern === 'p' ? -1 : 1));
-	searchedMarkList.sort((x, y) => x.lo - y.lo);
+	searchedMarkList.sort((x, y) => (x.lo !== y.lo) ? x.lo - y.lo : ((x.hi !== y.hi) ? y.hi - x.hi : (x.tag === 'div') ? 1 : -1));
 	return searchedMarkList;
 }
 
@@ -353,80 +312,28 @@ function createMarkTree(searchedMarkList, text) {
 	return rootNode;
 }
 
-function compareRangeMarkList(a, b) {
-	let isEqual = a.length === b.length;
-	for (let i = 0; i < a.length; i++) {
-		isEqual = isEqual && MarkElement.equal(a[i], b[i]);
-	}
-	return isEqual;
-}
-
-function createHTMLByTree(rootNode, text) {
-	function scanTree(curNode) {
-		if(curNode.pattern === 'br') {
-			return React.createElement(curNode.tag);
-		}
-		
-		const children = [];
-		for(let i = 0; i < curNode.children.length; i++) {
-			if(i > 0) {
-				children.push(text.substring(curNode.children[i - 1].hi, curNode.children[i].lo));
-			}
-			children.push(scanTree(curNode.children[i]));
-		}
-		
-		const leftPattern = curNode.leftPattern;
-		const rightPattern = curNode.rightPattern;
-		const tagType = curNode.tag;
-		let leftTextTag = '', rightTextTag = '';
-		
-		if(curNode.isChildrenEmpty) {
-			children.push(text.substring(curNode.lo + leftPattern.length, curNode.hi - rightPattern.length));
-		} else {
-			leftTextTag = text.substring(curNode.lo + leftPattern.length, curNode.leftmostChildTagPos);
-			rightTextTag = text.substring(curNode.rightmostChildTagPos, curNode.hi - rightPattern.length);
-		}
-		return React.createElement(tagType, null, [leftTextTag].concat(children, [rightTextTag]));
-	}
-	return scanTree(rootNode);
-}
-
 function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
-	const cursorPosition = getCursorPosition(DOMRootNode);
-	let newCursorOffset = -1;
-	let newCursorNode;
-	
-	function createTextNode(lo, hi) {
-		const textNode = document.createTextNode(textContent.substring(lo, hi));
-		const wrapNode = document.createElement('span');
-		wrapNode.setAttribute("textLo", lo);
-		wrapNode.setAttribute("textHi", hi);
-		wrapNode.appendChild(textNode);
-		if(cursorPosition >= lo && cursorPosition <= hi) {
-			newCursorOffset = cursorPosition - lo;
-			newCursorNode = textNode;
-		}
-		return wrapNode;
-	}
-	
+	const cursorPosition = getCursorPosition(DOMRootNode, textContent);
 	function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
+		if(lo === hi) {
+			DOMnode.appendChild(document.createElement('br'));
+		}
 		for(const markChild of markNode.children) {
-			if(lo < markChild.lo) {
-				DOMnode.appendChild(createTextNode(lo, markChild.lo));
+			if(lo < markChild.lo && DOMnode !== DOMRootNode) {
+				DOMnode.appendChild(document.createTextNode(textContent.substring(lo, markChild.lo)));
 			}
 			const childDOMNode = document.createElement(markChild.tag);
 			addDOMNodeByMarkTree(markChild, childDOMNode, markChild.lo, markChild.hi);
 			DOMnode.appendChild(childDOMNode);
 			lo = markChild.hi;
 		}
-		if(lo < hi) {
-			DOMnode.appendChild(createTextNode(lo, hi));
+		if(lo < hi && DOMnode !== DOMRootNode) {
+			DOMnode.appendChild(document.createTextNode(textContent.substring(lo, hi)));
 		}
 	}
-	
 	deleteDOMChildren(DOMRootNode);
 	addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length);
-	setCursorPosition(newCursorNode, newCursorOffset);
+	setCursorPosition(DOMRootNode, cursorPosition);
 }
 
 function deleteDOMChildren(node) {
@@ -436,15 +343,65 @@ function deleteDOMChildren(node) {
 	}
 }
 
-function getCursorPosition(DOMNode) {
+function getCursorPosition(DOMNode, text) {
 	const range = window.getSelection().getRangeAt(0);
-	return range.startOffset + parseInt(range.startContainer.parentNode.getAttribute('textLo'));
+	const tempRange = range.cloneRange();
+    tempRange.selectNodeContents(DOMNode);
+    tempRange.setEnd(range.endContainer, range.endOffset);
+	
+	let row = 0;
+	let curLineNode = range.endContainer;
+	if(curLineNode !== DOMNode) {
+		while(curLineNode.parentNode !== DOMNode) {
+			curLineNode = curLineNode.parentNode;
+		}
+		const lines = DOMNode.childNodes;
+		for (; row < lines.length; row++) {
+			if (lines[row] === curLineNode) {
+				break;
+			}
+		}
+	}
+	
+	let column = tempRange.toString().length;
+	const lines = text.split('\n');
+	for(let i = 0; i < row; i++) {
+		column -= lines[i].length;
+	}
+	
+	return {
+		row: row,
+		column: column,
+	}
 }
 
-function setCursorPosition(targetNode, targetOffset) {
-	if(targetNode === undefined) {
-		return;
+function setCursorPosition(DOMNode, cursorPosition) {
+	const {row, column} = cursorPosition;
+	let targetNode, targetOffset, offset = 0;
+	function scanTextNodes(node) {
+		if (node.nodeType === Node.TEXT_NODE) {
+			const textLength = node.nodeValue.length;
+			if(offset + textLength >= column) {
+				targetNode = node;
+				targetOffset = column - offset;
+				
+			} else {
+				offset += textLength;
+			}
+		} else if (node.tagName === 'BR') {
+			targetNode = node;
+			targetOffset = column - offset;
+		} else {
+			for (const child of node.childNodes) {
+				scanTextNodes(child);
+				if(targetNode !== undefined) {
+					break;
+				}
+			}
+		}
 	}
+	scanTextNodes(DOMNode.childNodes[row]);
+	
 	const range = document.createRange();
 	range.setStart(targetNode, targetOffset);
 	range.collapse(true);
@@ -452,4 +409,8 @@ function setCursorPosition(targetNode, targetOffset) {
 	const selection = window.getSelection();
 	selection.removeAllRanges();
 	selection.addRange(range);
+}
+
+function compatibleLineBreakToChrome(text) {
+	return text.replace(/\n\n/g, '\n');
 }
