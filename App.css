@@ -1,0 +1,12 @@
+.center-content {
+	display: flex;
+	justify-content: space-between;
+}
+
+.content-box {
+	flex: 0 0 50%;
+	max-width: 50%;
+	box-sizing: border-box;
+	border: 1px solid #ccc;
+	padding: 10px;
+}

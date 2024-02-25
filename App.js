@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import './App.css';
 
 const defaultTitle = 'New Document';
 
@@ -22,38 +23,60 @@ function CenterTitle() {
 
 function CenterContent() {
 	const divEditorRef = useRef();
+	const divHTMLRef = useRef();
+	const textPosDisplayRef = useRef();
+	let cursorPosition = new TextPosition();
 	
-	const handleInputChange = (event) => {
-		let text = compatibleLineBreakToChrome(event.target.innerText);
-		if(text === '\n') {
-			if (event.nativeEvent.inputType === "deleteContentBackward" || event.nativeEvent.inputType === "deleteContentForward") {
-				deleteDOMChildren(divEditorRef.current);
-				return;
-			}
+	function handleInputChange(event) {
+		if(allowCompositeEditorDOM(event)) {
+			updateEditorDOM(compatibleLineBreak(event.target.innerText));
 		}
-		
-		if(true) {
-			const searchedMarkList = createRangeMarkList(text);
-			const rootMarkNode = createMarkTree(searchedMarkList, text);
-			const rootDOMNode = divEditorRef.current;
-			applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
-		}
-	};
+	}
+	
+	function handleSelectChange(event) {
+		updateCursorPosition(compatibleLineBreak(event.target.innerText));
+	}
+	
+	function updateCursorPosition(text) {
+		cursorPosition = getCursorPosition(divEditorRef.current, text);
+		textPosDisplayRef.current.innerText = `row: ${cursorPosition.row}, column: ${cursorPosition.column}`;
+	}
+	
+	function updateEditorDOM(text) {
+		updateCursorPosition(text);
+		const searchedMarkList = createRangeMarkList(text);
+		const rootMarkNode = createMarkTree(searchedMarkList, text);
+		const rootDOMNode = divEditorRef.current;
+		applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
+		applyMarkTreeToHTMLDOM(rootMarkNode, divHTMLRef.current, text);
+		setCursorPosition(rootDOMNode, cursorPosition);
+	}
+	
+	function allowCompositeEditorDOM(event) {
+		return event.nativeEvent.inputType !== 'insertCompositionText';
+	}
 	
 	return (
-		<>
+		<div class='center-content'>
 			<div
+				class='content-box'
 				ref={divEditorRef}
 				contentEditable={true}
 				onInput={handleInputChange}
+				onSelect={handleSelectChange}
 				style={{ border: '1px solid #ccc', padding: '8px' }}
 			/>
-		</>
+			<div
+				class='content-box'
+				ref={divHTMLRef}
+			/>
+			<span ref={textPosDisplayRef}/>
+		</div>
 	);
 }
 
 ////////////////////// INTERNAL //////////////////////
-const patternTitleList = ['# ', '## ', '### ', '#### ', '##### ', '###### '];
+const patternTitleList = ['#', '##', '###', '####', '#####', '######'];
 const patternOnlyLine = '---';
 const patternCodeBlock = '```';
 const patternCharList = ['~~', '**', '__', '*', '_', '`'];
@@ -63,12 +86,12 @@ function convertPatternToTag(pattern) {
 	switch(pattern) {
 		// case '---': return 'h1';
 		// case '```': return 'i';
-		case '# ': return 'h1';
-		case '## ': return 'h2';
-		case '### ': return 'h3';
-		case '#### ': return 'h4';
-		case '##### ': return 'h5';
-		case '###### ': return 'h6';
+		case '#': return 'h1';
+		case '##': return 'h2';
+		case '###': return 'h3';
+		case '####': return 'h4';
+		case '#####': return 'h5';
+		case '######': return 'h6';
 		case '**': 
 		case '_': return 'b';
 		case '*': 
@@ -97,23 +120,14 @@ class MarkTreeNode {
 		return convertPatternToTag(this.pattern);
 	}
 	
-	get isChildrenEmpty() {
-		return this.children.length <= 0;
-	}
-	get leftmostChildTagPos() {
-		return this.isChildrenEmpty ? this.hi : this.children[0].lo;
-	}
-	get rightmostChildTagPos() {            
-		return this.isChildrenEmpty ? this.lo : this.children[this.children.length - 1].hi;
-	}
 	get leftPattern() {
 		switch(this.pattern) {
-			case '# ': 
-			case '## ':
-			case '### ': 
-			case '#### ': 
-			case '##### ': 
-			case '###### ': 
+			case '#': 
+			case '##':
+			case '###': 
+			case '####': 
+			case '#####': 
+			case '######': 
 			case '**': 
 			case '_': 
 			case '*': 
@@ -127,12 +141,12 @@ class MarkTreeNode {
 	
 	get rightPattern() {
 		switch(this.pattern) {
-			case '# ': 
-			case '## ':
-			case '### ': 
-			case '#### ': 
-			case '##### ': 
-			case '###### ': return '';
+			case '#': 
+			case '##':
+			case '###': 
+			case '####': 
+			case '#####': 
+			case '######': return '';
 			case '**': 
 			case '_': 
 			case '*': 
@@ -151,9 +165,12 @@ class MarkElement {
 		this.hi = hi;
 		this.pattern = pattern;
 	}
-	
-	static equal(a, b) {
-		return a.lo === b.lo && a.hi === b.hi && a.pattern === b.pattern;
+}
+
+class TextPosition {
+	constructor(row=0, column=0) {
+		this.row = row;
+		this.column = column;
 	}
 }
 
@@ -185,13 +202,9 @@ function createRangeMarkList(textContent) {
 				idx--;
 			}
 			if(matched) {
-				searchedMarkList.push(
-					new MarkElement(
-						singleMarkCharStack[idx].pos,
-						item.pos + item.pattern.length,
-						item.pattern
-					)
-				);
+				const lo = singleMarkCharStack[idx].pos;
+				const hi = item.pos + item.pattern.length;
+				searchedMarkList.push(new MarkElement(lo, hi, item.pattern));
 				while(idx < singleMarkCharStack.length) {
 					singleMarkCharStack.pop();
 				}
@@ -217,9 +230,8 @@ function createRangeMarkList(textContent) {
 					const item = new SingleMarkElement(i + lineOffset, pattern);
 					if(!findMatch(item)) {
 						singleMarkCharStack.push(item);
-					} else {
-						i += patternLength - 1;
 					}
+					i += patternLength - 1;
 					break;
 				}
 			}
@@ -268,11 +280,12 @@ function createRangeMarkList(textContent) {
 		
 		for(const pattern of patternTitleList) {
 			const patternLength = pattern.length;
-			if(patternLength > line.length) {
+			if(patternLength + 1 > line.length) {
 				continue;
 			}
 			const lineSeg = line.substring(0, patternLength);
-			if(pattern === lineSeg) {
+			const space = line[patternLength].charCodeAt();
+			if(pattern === lineSeg && (space === 32 || space === 160)) {
 				searchedMarkList.push(
 					new MarkElement(
 						lineOffset,
@@ -313,9 +326,8 @@ function createMarkTree(searchedMarkList, text) {
 }
 
 function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
-	const cursorPosition = getCursorPosition(DOMRootNode, textContent);
 	function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
-		if(lo === hi) {
+		if(lo === hi && DOMnode !== DOMRootNode && markNode.tag ==='div') {
 			DOMnode.appendChild(document.createElement('br'));
 		}
 		for(const markChild of markNode.children) {
@@ -333,7 +345,6 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
 	}
 	deleteDOMChildren(DOMRootNode);
 	addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length);
-	setCursorPosition(DOMRootNode, cursorPosition);
 }
 
 function deleteDOMChildren(node) {
@@ -369,10 +380,7 @@ function getCursorPosition(DOMNode, text) {
 		column -= lines[i].length;
 	}
 	
-	return {
-		row: row,
-		column: column,
-	}
+	return new TextPosition(row, column);
 }
 
 function setCursorPosition(DOMNode, cursorPosition) {
@@ -411,6 +419,45 @@ function setCursorPosition(DOMNode, cursorPosition) {
 	selection.addRange(range);
 }
 
-function compatibleLineBreakToChrome(text) {
-	return text.replace(/\n\n/g, '\n');
+function compatibleLineBreak(text) {
+	const newlineCount = (text.match(/\n/g) || []).length;
+	const tempText = newlineCount % 2 === 1 ? text.replace(/\n$/, '') : text;
+	return tempText.replace(/\n\n/g, '\n');
+}
+
+function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, textContent) {
+	function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
+		for(const markChild of markNode.children) {
+			if(lo < markChild.lo) {
+				DOMnode.appendChild(document.createTextNode(textContent.substring(lo, markChild.lo)));
+			}
+			const childDOMNode = document.createElement(markChild.tag);
+			addDOMNodeByMarkTree(markChild, childDOMNode, markChild.lo + markChild.leftPattern.length, markChild.hi - markChild.rightPattern.length);
+			DOMnode.appendChild(childDOMNode);
+			lo = markChild.hi;
+		}
+		if(lo < hi) {
+			DOMnode.appendChild(document.createTextNode(textContent.substring(lo, hi)));
+		}
+	}
+	deleteDOMChildren(DOMRootNode);
+	
+	let paragraphFlag = true;
+	let paragraphNode;
+	for(const markChild of markRootNode.children) {
+		if(paragraphFlag) {
+			if(markChild.lo !== markChild.hi) {
+				paragraphNode = document.createElement('p');
+				DOMRootNode.appendChild(paragraphNode);
+				paragraphFlag = false;
+			}
+		} else {
+			if(markChild.lo !== markChild.hi) {
+				paragraphNode.appendChild(document.createElement('br'));
+			} else {
+				paragraphFlag = true;
+			}
+		}
+		addDOMNodeByMarkTree(markChild, paragraphNode, markChild.lo, markChild.hi);
+	}
 }
