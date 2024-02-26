@@ -1,12 +1,78 @@
 .center-content {
-	display: flex;
-	justify-content: space-between;
+  display: flex;
+  justify-content: space-between;
 }
 
-.content-box {
-	flex: 0 0 50%;
-	max-width: 50%;
-	box-sizing: border-box;
-	border: 1px solid #ccc;
-	padding: 10px;
+.center-content > .content-box {
+  flex: 0 0 50%;
+  max-width: 50%;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  padding: 10px;
+}
+
+.editor-pattern {
+  color: #999;
+}
+
+.editor-del {
+  text-decoration: line-through;
+}
+
+.editor-em {
+  font-style: italic;
+}
+
+.editor-strong {
+  font-weight: bold;
+}
+
+.editor-h1 {
+  font-size: 2em;
+  font-weight: bold;
+}
+
+.editor-h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+}
+
+.editor-h3 {
+  font-size: 1.25em;
+  font-weight: bold;
+}
+
+.editor-h4 {
+  font-size: 1.1em;
+  font-weight: bold;
+}
+
+.editor-h5 {
+  font-size: 1em;
+  font-weight: bold;
+}
+
+.editor-h6 {
+  font-size: 0.9em;
+  font-weight: bold;
+}
+
+.editor-code {
+  background-color: #ccc;
+  border-radius: 5px;
+  font-size: 0.9em;
+}
+
+.editor-blockquote {
+  color: #bbb;
+}
+
+.editor-sup {
+  vertical-align: super;
+  font-size: smaller;
+}
+
+.editor-sub {
+  vertical-align: sub;
+  font-size: smaller;
 }
