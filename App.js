@@ -57,7 +57,7 @@ function CenterContent() {
     const rootDOMNode = divEditorRef.current;
     applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
     applyMarkTreeToHTMLDOM(rootMarkNode, divHTMLRef.current, text);
-    setCursorPosition(rootDOMNode, cursorPosition);
+    // setCursorPosition(rootDOMNode, cursorPosition);
   }
 
   function allowCompositeEditorDOM(event) {
@@ -88,19 +88,19 @@ class MarkData {
     pattern = "",
     tag = "",
     isDouble = false,
-    isLine = false,
-    isRoot = false,
-    applyStyleToHTML = false,
+    isLineData = false,
     applyEffectOnPattern = false,
+    onlySingleLine = false,
+    containLineData = false,
   }) {
     this.styleClass = styleClass;
     this.pattern = pattern;
     this.tag = tag;
     this.isDouble = isDouble;
-    this.isLine = isLine;
-    this.isRoot = isRoot;
-    this.applyStyleToHTML = applyStyleToHTML;
+    this.isLineData = isLineData;
     this.applyEffectOnPattern = applyEffectOnPattern;
+    this.onlySingleLine = onlySingleLine;
+    this.containLineData = containLineData;
   }
 }
 
@@ -133,17 +133,17 @@ class MarkTreeNode {
   get styleClass() {
     return this.markData.styleClass;
   }
-  get isLine() {
-    return this.markData.isLine;
-  }
-  get isRoot() {
-    return this.markData.isRoot;
-  }
-  get applyStyleToHTML() {
-    return this.markData.applyStyleToHTML;
+  get isLineData() {
+    return this.markData.isLineData;
   }
   get applyEffectOnPattern() {
     return this.markData.applyEffectOnPattern;
+  }
+  get onlySingleLine() {
+    return this.markData.onlySingleLine;
+  }
+  get containLineData() {
+    return this.markData.containLineData;
   }
   get leftPattern() {
     return this.markData.pattern;
@@ -263,10 +263,10 @@ const markDataDBOnlyLine = [
     pattern: "---",
     tag: "hr",
   }),
+  new MarkData({
+    pattern: "```",
+  }),
 ];
-//const patternCodeBlock = "```";
-const markDataDBParagrpah = new MarkData({ isLine: true });
-const markDataDBRoot = new MarkData({ isRoot: true });
 const markPatternDBComment = "\\";
 
 function createRangeMarkList(textContent) {
@@ -283,8 +283,7 @@ function createRangeMarkList(textContent) {
       this.hi = hi;
     }
   }
-
-  function scanLine(line, lineOffset, skipPos) {
+  function scanDoublePatternInLine(line, lineOffset, skipPos) {
     const singleMarkCharStack = [];
     function findMatch(element) {
       let matched = false;
@@ -336,73 +335,89 @@ function createRangeMarkList(textContent) {
   }
 
   const lines = textContent.split("\n");
-  let lineOffset = 0;
-
-  for (const line of lines) {
-    let patternMatched = false;
-    let skipPos = 0;
-
-    for (const data of markDataDBOnlyLine) {
-      const patternLength = data.pattern.length;
-      const lineSeg = line.substring(0, patternLength);
-      if (data.pattern === lineSeg) {
-        searchedMarkList.push(
-          new MarkRange(lineOffset, lineOffset + line.length, data)
-        );
-        patternMatched = true;
-        skipPos += patternLength;
-        break;
+  function scanLargeCodeBlock() {
+    let prevPos = -1;
+    let curPos = 0;
+    for (const line of lines) {
+      const pattern = "```";
+      if (line === pattern) {
+        if (prevPos === -1) {
+          prevPos = curPos;
+        } else {
+          searchedMarkList.push(
+            new MarkRange(
+              prevPos,
+              curPos + line.length,
+              new MarkData({
+                styleClass: "editor-code",
+                tag: "code",
+                containLineData: true,
+                onlySingleLine: true,
+              })
+            )
+          );
+          prevPos = -1;
+        }
       }
+      curPos += line.length + 1;
     }
-
-    /*if(patternCodeBlock.length === line.length) {
-			const lineSeg = line.substring(0, patternCodeBlock.length);
-			if(patternCodeBlock === lineSeg) {
-				if(singleMarkCodeBlockStack.length > 0) {
-					searchedMarkList.push(
-						new MarkRange(
-							singleMarkCodeBlockStack.pop(),
-							lineOffset + line.length,
-							patternCodeBlock
-						)
-					);
-				} else {
-					singleMarkCodeBlockStack.push(lineOffset);
-				}
-				patternMatched = true;
-				skipPos += line.length;
-			}
-		}*/
-
-    for (const data of markDataDBSingle) {
-      const patternLength = data.pattern.length;
-      if (patternLength + 1 > line.length) {
-        continue;
-      }
-      const lineSeg = line.substring(0, patternLength);
-      const space = line[patternLength].charCodeAt();
-      if (data.pattern === lineSeg && (space === 32 || space === 160)) {
-        searchedMarkList.push(
-          new MarkRange(lineOffset, lineOffset + line.length, data)
-        );
-        patternMatched = true;
-        skipPos += patternLength;
-        break;
-      }
-    }
-
-    scanLine(line, lineOffset, skipPos);
-    searchedMarkList.push(
-      new MarkRange(lineOffset, lineOffset + line.length, markDataDBParagrpah)
-    );
-    lineOffset += line.length + 1;
   }
+  scanLargeCodeBlock();
+
+  function scanSinglePattern() {
+    let lineOffset = 0;
+    for (const line of lines) {
+      let singleLineMatched = false;
+      let skipPos = 0;
+
+      for (const data of markDataDBOnlyLine) {
+        const patternLength = data.pattern.length;
+        const lineSeg = line.substring(0, patternLength);
+        if (data.pattern === lineSeg) {
+          searchedMarkList.push(
+            new MarkRange(lineOffset, lineOffset + line.length, data)
+          );
+          singleLineMatched = true;
+          skipPos += patternLength;
+          break;
+        }
+      }
+
+      for (const data of markDataDBSingle) {
+        const patternLength = data.pattern.length;
+        if (patternLength + 1 > line.length) {
+          continue;
+        }
+        const lineSeg = line.substring(0, patternLength);
+        const space = line[patternLength].charCodeAt();
+        if (data.pattern === lineSeg && (space === 32 || space === 160)) {
+          searchedMarkList.push(
+            new MarkRange(lineOffset, lineOffset + line.length, data)
+          );
+          singleLineMatched = true;
+          skipPos += patternLength;
+          break;
+        }
+      }
+
+      scanDoublePatternInLine(line, lineOffset, skipPos);
+      searchedMarkList.push(
+        new MarkRange(
+          lineOffset,
+          lineOffset + line.length,
+          new MarkData({ isLineData: true, onlySingleLine: singleLineMatched })
+        )
+      );
+      lineOffset += line.length + 1;
+    }
+  }
+  scanSinglePattern();
   searchedMarkList.sort((x, y) =>
     x.lo !== y.lo
       ? x.lo - y.lo
       : x.hi !== y.hi
       ? y.hi - x.hi
-      : x.isLine
+      : x.isLineData
       ? 1
       : -1
   );
@@ -410,7 +425,7 @@ function createRangeMarkList(textContent) {
 }
 
 function createMarkTree(searchedMarkList, text) {
-  const rootNode = new MarkTreeNode(0, text.length, markDataDBRoot);
+  const rootNode = new MarkTreeNode(0, text.length, new MarkData({}));
   const nodeStack = [];
 
   let curNode = rootNode;
@@ -428,24 +443,26 @@ function createMarkTree(searchedMarkList, text) {
 }
 
 function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
+  function checkLineBreak(lo, hi) {
+    return textContent.substring(lo, hi) === "\n";
+  }
   function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
-    if (lo === hi && markNode.isLine) {
+    if (lo === hi && markNode.isLineData) {
       DOMnode.appendChild(document.createElement("br"));
     }
     for (const markChild of markNode.children) {
-      if (lo < markChild.lo && !markNode.isRoot) {
+      if (lo < markChild.lo && !checkLineBreak(lo, markChild.lo)) {
         DOMnode.appendChild(
           document.createTextNode(textContent.substring(lo, markChild.lo))
         );
       }
 
       const childDOMNode = document.createElement(
-        markChild.isLine ? "div" : "span"
+        markChild.isLineData ? "div" : "span"
       );
       if (markChild.styleClass !== "") {
         childDOMNode.setAttribute("class", markChild.styleClass);
       }
-
       const leftLength = markChild.leftPattern.length;
       const rightLength = markChild.rightPattern.length;
       const leftTag = document.createElement("span");
@@ -463,38 +480,30 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
       );
       rightTag.setAttribute("class", "editor-pattern");
 
+      function applyChild(patternTarget) {
+        if (leftLength > 0) {
+          patternTarget.appendChild(leftTag);
+        }
+        addDOMNodeByMarkTree(
+          markChild,
+          childDOMNode,
+          markChild.lo + leftLength,
+          markChild.hi - rightLength
+        );
+        DOMnode.appendChild(childDOMNode);
+        if (rightLength > 0) {
+          patternTarget.appendChild(rightTag);
+        }
+      }
+
       if (markChild.applyEffectOnPattern) {
-        if (leftLength > 0) {
-          childDOMNode.appendChild(leftTag);
-        }
-        addDOMNodeByMarkTree(
-          markChild,
-          childDOMNode,
-          markChild.lo + leftLength,
-          markChild.hi - rightLength
-        );
-        DOMnode.appendChild(childDOMNode);
-        if (rightLength > 0) {
-          childDOMNode.appendChild(rightTag);
-        }
+        applyChild(childDOMNode);
       } else {
-        if (leftLength > 0) {
-          DOMnode.appendChild(leftTag);
-        }
-        addDOMNodeByMarkTree(
-          markChild,
-          childDOMNode,
-          markChild.lo + leftLength,
-          markChild.hi - rightLength
-        );
-        DOMnode.appendChild(childDOMNode);
-        if (rightLength > 0) {
-          DOMnode.appendChild(rightTag);
-        }
+        applyChild(DOMnode);
       }
       lo = markChild.hi;
     }
-    if (lo < hi && !markNode.isRoot) {
+    if (lo < hi && !checkLineBreak(lo, hi)) {
       DOMnode.appendChild(
         document.createTextNode(textContent.substring(lo, hi))
       );
@@ -592,6 +601,10 @@ function compatibleLineBreak(text) {
 function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, textContent) {
   function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
     for (const markChild of markNode.children) {
+      if (markChild.tag === "") {
+        lo = markChild.hi;
+        continue;
+      }
       if (lo < markChild.lo) {
         DOMnode.appendChild(
           document.createTextNode(textContent.substring(lo, markChild.lo))
@@ -615,22 +628,45 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, textContent) {
   }
   deleteDOMChildren(DOMRootNode);
 
-  let paragraphFlag = true;
-  let paragraphNode;
-  for (const markChild of markRootNode.children) {
-    if (paragraphFlag) {
-      if (markChild.lo !== markChild.hi) {
-        paragraphNode = document.createElement("p");
-        DOMRootNode.appendChild(paragraphNode);
-        paragraphFlag = false;
-      }
-    } else {
-      if (markChild.lo !== markChild.hi) {
-        paragraphNode.appendChild(document.createElement("br"));
+  function isSingleLine(markNode) {
+    return markNode.lo === markNode.hi || markNode.onlySingleLine;
+  }
+  function scanLineNodes(markNode, DOMnode) {
+    let paragraphActiveFlag = false;
+    let paragraphNode;
+    for (const markChild of markNode.children) {
+      if (paragraphActiveFlag) {
+        if (!isSingleLine(markChild)) {
+          paragraphNode.appendChild(document.createElement("br"));
+        } else {
+          paragraphActiveFlag = false;
+        }
       } else {
-        paragraphFlag = true;
+        if (!isSingleLine(markChild)) {
+          paragraphNode = document.createElement("p");
+          DOMnode.appendChild(paragraphNode);
+          paragraphActiveFlag = true;
+        }
+      }
+      if (paragraphActiveFlag) {
+        addDOMNodeByMarkTree(
+          markChild,
+          paragraphNode,
+          markChild.lo,
+          markChild.hi
+        );
+      } else {
+        if (markChild.containLineData) {
+          const areaTag = document.createElement(markChild.tag);
+          DOMnode.appendChild(areaTag);
+          scanLineNodes(markChild, areaTag);
+        } else {
+          addDOMNodeByMarkTree(markChild, DOMnode, markChild.lo, markChild.hi);
+        }
       }
     }
-    addDOMNodeByMarkTree(markChild, paragraphNode, markChild.lo, markChild.hi);
   }
+  scanLineNodes(markRootNode, DOMRootNode);
+  console.log(markRootNode);
+  console.log(DOMRootNode.innerHTML);
 }
