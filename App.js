@@ -48,15 +48,15 @@ function CenterContent() {
   function updateCursorPosition(text) {
     cursorPosition = getCursorPosition(divEditorRef.current, text);
     textPosDisplayRef.current.innerText = `row: ${cursorPosition.row}, column: ${cursorPosition.column}`;
+    return cursorPosition;
   }
 
   function updateEditorDOM(text) {
     updateCursorPosition(text);
     const rootMarkNode = createMarkTree(text);
     const rootDOMNode = divEditorRef.current;
-    applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
+    applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text, cursorPosition);
     applyMarkTreeToHTMLDOM(rootMarkNode, divHTMLRef.current, text);
-    setCursorPosition(rootMarkNode, cursorPosition);
   }
 
   function allowCompositeEditorDOM(event) {
@@ -254,16 +254,7 @@ const markDataDBOnlyLine = [
   }),
 ];
 const markPatternDBComment = "\\";
-
-const textDOMNodeRowMap = new Map();
-let textDOMNodeMatrix = [[]];
-
-class TextDOMNodeMatrixNode {
-  constructor(offset, textNode) {
-    this.offset = offset;
-    this.textNode = textNode;
-  }
-}
+const dataLineAttributeName = "data-line";
 
 function createRangeMarkList(textContent) {
   const resultList = [];
@@ -447,55 +438,53 @@ function createMarkTree(text) {
   return rootNode;
 }
 
-function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
-  textDOMNodeMatrix = [[]];
+function applyMarkTreeToEditorDOM(
+  markRootNode,
+  DOMRootNode,
+  textContent,
+  cursorPosition
+) {
+  const { row, column } = cursorPosition;
   function checkLineBreak(lo, hi) {
     return textContent.substring(lo, hi) === "\n";
   }
-  function createTextNode(lo, hi, row) {
-    const textNode = document.createTextNode(textContent.substring(lo, hi));
-    textDOMNodeRowMap.set(textNode, row);
-    textDOMNodeMatrix[row].push(new TextDOMNodeMatrixNode(lo - row, textNode));
-    return textNode;
+  function createTextNode(lo, hi) {
+    return document.createTextNode(textContent.substring(lo, hi));
   }
   function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi, row) {
     if (lo === hi && markNode.markData.isLineData) {
       DOMnode.appendChild(document.createElement("br"));
     }
     for (const markChild of markNode.children) {
+      row += markChild.markData.isLineData ? 1 : 0;
       if (lo < markChild.lo && !checkLineBreak(lo, markChild.lo)) {
-        DOMnode.appendChild(createTextNode(lo, markChild.lo, row));
+        DOMnode.appendChild(createTextNode(lo, markChild.lo));
       }
       const childDOMNode = document.createElement(
         markChild.markData.isLineData ? "div" : "span"
       );
+      if (markChild.markData.isLineData) {
+        childDOMNode.setAttribute(dataLineAttributeName, row);
+      }
       if (markChild.markData.styleClass !== "") {
         childDOMNode.setAttribute("class", markChild.markData.styleClass);
       }
       const leftLength = markChild.markData.leftPatternLength;
       const rightLength = markChild.markData.rightPatternLength;
       function applyChild(patternTarget) {
+        const newLo = markChild.lo + leftLength;
+        const newHi = markChild.hi - rightLength;
         if (leftLength > 0) {
           const leftTag = document.createElement("span");
-          leftTag.appendChild(
-            createTextNode(markChild.lo, markChild.lo + leftLength, row)
-          );
+          leftTag.appendChild(createTextNode(markChild.lo, newLo));
           leftTag.setAttribute("class", "editor-pattern");
           patternTarget.appendChild(leftTag);
         }
-        addDOMNodeByMarkTree(
-          markChild,
-          childDOMNode,
-          markChild.lo + leftLength,
-          markChild.hi - rightLength,
-          row
-        );
+        addDOMNodeByMarkTree(markChild, childDOMNode, newLo, newHi, row);
         DOMnode.appendChild(childDOMNode);
         if (rightLength > 0) {
           const rightTag = document.createElement("span");
-          rightTag.appendChild(
-            createTextNode(markChild.hi - rightLength, markChild.hi, row)
-          );
+          rightTag.appendChild(createTextNode(newHi, markChild.hi));
           rightTag.setAttribute("class", "editor-pattern");
           patternTarget.appendChild(rightTag);
         }
@@ -505,19 +494,15 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, textContent) {
       } else {
         applyChild(DOMnode);
       }
-
       lo = markChild.hi;
-      if (markChild.markData.isLineData) {
-        row++;
-        textDOMNodeMatrix.push([]);
-      }
     }
     if (lo < hi && !checkLineBreak(lo, hi)) {
-      DOMnode.appendChild(createTextNode(lo, hi, row));
+      DOMnode.appendChild(createTextNode(lo, hi));
     }
   }
   deleteDOMChildren(DOMRootNode);
-  addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length, 0);
+  addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length, -1);
+  console.log(DOMRootNode);
 }
 
 function deleteDOMChildren(node) {
@@ -536,8 +521,22 @@ function getCursorPosition(rootDOMNode, text) {
   tempRange.selectNodeContents(rootDOMNode);
   tempRange.setEnd(range.endContainer, range.endOffset);
 
+  let row = 0;
+  function trackParent(node) {
+    if (!node.parentNode) {
+      return;
+    }
+    if (node.nodeType !== Node.TEXT_NODE) {
+      if (node.hasAttribute(dataLineAttributeName)) {
+        row = parseInt(node.getAttribute(dataLineAttributeName));
+        return;
+      }
+    }
+    trackParent(node.parentNode);
+  }
+  trackParent(range.endContainer);
+
   const lines = text.split("\n");
-  const row = textDOMNodeRowMap.get(range.endContainer);
   const offset = tempRange.toString().length;
   let column = offset;
   for (let i = 0; i < row; i++) {
@@ -546,27 +545,10 @@ function getCursorPosition(rootDOMNode, text) {
   return new TextPosition(row, column, offset);
 }
 
-function setCursorPosition(rootMarkNode, cursorPosition) {
-  const { row, offset } = cursorPosition;
+function setCursorPosition(targetNode, targetOffset) {
   if (!window.getSelection().rangeCount > 0 || offset === 0) {
     return;
   }
-  let targetNode = null,
-    targetOffset = 0;
-
-  const list = textDOMNodeMatrix[row];
-  for (let i = 0; i < list.length - 1; i++) {
-    if (list[i + 1].offset > offset) {
-      targetNode = list[i].textNode;
-      targetOffset = offset - list[i].offset;
-      break;
-    }
-  }
-  if (targetNode === null) {
-    targetNode = list[list.length - 1].textNode;
-    targetOffset = offset - list[list.length - 1].offset;
-  }
-
   const range = document.createRange();
   const selection = window.getSelection();
   range.setStart(targetNode, targetOffset);
