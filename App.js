@@ -52,10 +52,9 @@ function CenterContent() {
   }
 
   function updateEditorDOM(text) {
-    updateCursorPosition(text);
     const rootMarkNode = createMarkTree(text);
     const rootDOMNode = divEditorRef.current;
-    applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text, cursorPosition);
+    applyMarkTreeToEditorDOM(rootMarkNode, rootDOMNode, text);
     applyMarkTreeToHTMLDOM(rootMarkNode, divHTMLRef.current, text);
   }
 
@@ -254,7 +253,8 @@ const markDataDBOnlyLine = [
   }),
 ];
 const markPatternDBComment = "\\";
-const dataLineAttributeName = "data-line";
+const lineBaseAttributeName = "data-line-base";
+const lineCntAttributeName = "data-line-cnt";
 
 function createRangeMarkList(textContent) {
   const resultList = [];
@@ -421,7 +421,11 @@ function createRangeMarkList(textContent) {
 
 function createMarkTree(text) {
   const markList = createRangeMarkList(text);
-  const rootNode = new MarkTreeNode(0, text.length, new MarkData({}));
+  const rootNode = new MarkTreeNode(
+    0,
+    text.length,
+    new MarkData({ containLineData: true })
+  );
   const nodeStack = [];
 
   let curNode = rootNode;
@@ -438,34 +442,47 @@ function createMarkTree(text) {
   return rootNode;
 }
 
-function applyMarkTreeToEditorDOM(
-  markRootNode,
-  DOMRootNode,
-  textContent,
-  cursorPosition
-) {
-  const { row, column } = cursorPosition;
+function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
+  const cursorPos = getCursorPosition(DOMRootNode, text);
+  let targetNode,
+    targetOffset,
+    row = 0;
   function checkLineBreak(lo, hi) {
-    return textContent.substring(lo, hi) === "\n";
+    return text.substring(lo, hi) === "\n";
   }
   function createTextNode(lo, hi) {
-    return document.createTextNode(textContent.substring(lo, hi));
+    const textNode = document.createTextNode(text.substring(lo, hi));
+    searchCursorNode(textNode, lo - row, hi - row);
+    return textNode;
   }
-  function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi, row) {
+  function searchCursorNode(node, lo, hi) {
+    if (
+      row === cursorPos.row &&
+      lo <= cursorPos.offset &&
+      hi >= cursorPos.offset
+    ) {
+      targetNode = node;
+      targetOffset = cursorPos.offset - lo;
+    }
+  }
+  function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
     if (lo === hi && markNode.markData.isLineData) {
       DOMnode.appendChild(document.createElement("br"));
+      searchCursorNode(DOMnode, lo - row, hi + 1 - row);
+      return;
     }
+    let prevRow = row;
+    if (markNode.markData.containLineData) {
+      DOMnode.setAttribute(lineBaseAttributeName, row);
+    }
+
     for (const markChild of markNode.children) {
-      row += markChild.markData.isLineData ? 1 : 0;
       if (lo < markChild.lo && !checkLineBreak(lo, markChild.lo)) {
         DOMnode.appendChild(createTextNode(lo, markChild.lo));
       }
       const childDOMNode = document.createElement(
         markChild.markData.isLineData ? "div" : "span"
       );
-      if (markChild.markData.isLineData) {
-        childDOMNode.setAttribute(dataLineAttributeName, row);
-      }
       if (markChild.markData.styleClass !== "") {
         childDOMNode.setAttribute("class", markChild.markData.styleClass);
       }
@@ -480,7 +497,7 @@ function applyMarkTreeToEditorDOM(
           leftTag.setAttribute("class", "editor-pattern");
           patternTarget.appendChild(leftTag);
         }
-        addDOMNodeByMarkTree(markChild, childDOMNode, newLo, newHi, row);
+        addDOMNodeByMarkTree(markChild, childDOMNode, newLo, newHi);
         DOMnode.appendChild(childDOMNode);
         if (rightLength > 0) {
           const rightTag = document.createElement("span");
@@ -495,14 +512,19 @@ function applyMarkTreeToEditorDOM(
         applyChild(DOMnode);
       }
       lo = markChild.hi;
+      row += markChild.markData.isLineData ? 1 : 0;
     }
     if (lo < hi && !checkLineBreak(lo, hi)) {
       DOMnode.appendChild(createTextNode(lo, hi));
     }
+
+    if (markNode.markData.containLineData) {
+      DOMnode.setAttribute(lineCntAttributeName, row - prevRow);
+    }
   }
   deleteDOMChildren(DOMRootNode);
-  addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, textContent.length, -1);
-  console.log(DOMRootNode);
+  addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, text.length, 0);
+  setCursorPosition(targetNode, targetOffset);
 }
 
 function deleteDOMChildren(node) {
@@ -523,14 +545,22 @@ function getCursorPosition(rootDOMNode, text) {
 
   let row = 0;
   function trackParent(node) {
-    if (!node.parentNode) {
+    const parentNode = node.parentNode;
+    if (!(parentNode instanceof Element)) {
       return;
     }
-    if (node.nodeType !== Node.TEXT_NODE) {
-      if (node.hasAttribute(dataLineAttributeName)) {
-        row = parseInt(node.getAttribute(dataLineAttributeName));
-        return;
+    if (parentNode.hasAttribute(lineBaseAttributeName)) {
+      row = parseInt(parentNode.getAttribute(lineBaseAttributeName));
+      const children = parentNode.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        if (children[i] === node) {
+          break;
+        }
+        row += children[i].hasAttribute(lineCntAttributeName)
+          ? parseInt(children[i].getAttribute(lineCntAttributeName))
+          : 1;
       }
+      return;
     }
     trackParent(node.parentNode);
   }
@@ -546,13 +576,13 @@ function getCursorPosition(rootDOMNode, text) {
 }
 
 function setCursorPosition(targetNode, targetOffset) {
-  if (!window.getSelection().rangeCount > 0 || offset === 0) {
+  if (!window.getSelection().rangeCount > 0 || !targetNode) {
     return;
   }
   const range = document.createRange();
-  const selection = window.getSelection();
   range.setStart(targetNode, targetOffset);
   range.collapse(true);
+  const selection = window.getSelection();
   selection.removeAllRanges();
   selection.addRange(range);
 }
