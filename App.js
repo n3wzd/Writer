@@ -45,6 +45,24 @@ function CenterContent() {
     updateEditorDOM(compatibleLineBreak(event.target.innerText));
   }
 
+  function handleKeyDown(event) {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      if (!window.getSelection().rangeCount > 0) {
+        return;
+      }
+      const selection = window.getSelection();
+      const range = selection.getRangeAt(0);
+      range.collapse(true);
+      const textNode = document.createTextNode("\t");
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  }
+
   function updateCursorPosition(text) {
     cursorPosition = getCursorPosition(divEditorRef.current, text);
     textPosDisplayRef.current.innerText = `row: ${cursorPosition.row}, column: ${cursorPosition.column}`;
@@ -65,16 +83,17 @@ function CenterContent() {
   return (
     <>
       <div className="center-content">
-        <div
+        <pre
           className="content-box"
           ref={divEditorRef}
           contentEditable={true}
           onInput={handleInputChange}
           onSelect={handleSelectChange}
           onCompositionEnd={handleCompositionEnd}
+          onKeyDown={handleKeyDown}
           style={{ border: "1px solid #ccc", padding: "8px" }}
         />
-        <div className="content-box" ref={divHTMLRef} />
+        <pre className="content-box" ref={divHTMLRef} />
       </div>
       <span ref={textPosDisplayRef} />
     </>
@@ -252,7 +271,25 @@ const markDataDBOnlyLine = [
     tag: "hr",
   }),
 ];
-const markPatternDBComment = "\\";
+const markDataDBCodeBlock = new MarkData({
+  styleClass: "editor-code",
+  pattern: "```",
+  tag: "code",
+  containLineData: true,
+});
+const markDataDBList = [
+  new MarkData({
+    styleClass: "editor-ul",
+    pattern: "-",
+    tag: "ul",
+    containLineData: true,
+  }),
+];
+const markPatternDBComment = new MarkData({
+  styleClass: "editor-comment",
+  pattern: "\\",
+  tag: "span",
+});
 const lineBaseAttributeName = "data-line-base";
 const lineCntAttributeName = "data-line-cnt";
 
@@ -265,35 +302,42 @@ function createRangeMarkList(textContent) {
         this.markData = markData;
       }
     }
-    const singleMarkCharStack = [];
+    const stk = [];
     function findMatch(element) {
       let matched = false;
-      let idx = singleMarkCharStack.length - 1;
+      let idx = stk.length - 1;
       while (idx >= 0) {
-        if (
-          singleMarkCharStack[idx].markData.pattern === element.markData.pattern
-        ) {
+        if (stk[idx].markData.pattern === element.markData.pattern) {
           matched = true;
           break;
         }
         idx--;
       }
       if (matched) {
-        const lo = singleMarkCharStack[idx].pos;
+        const lo = stk[idx].pos;
         const hi = element.pos + element.markData.pattern.length;
         resultList.push(new MarkRange(lo, hi, element.markData));
-        while (idx < singleMarkCharStack.length) {
-          singleMarkCharStack.pop();
+        while (idx < stk.length) {
+          stk.pop();
         }
       }
       return matched;
     }
 
     for (let i = 0; i < line.length; i++) {
-      if (i <= line.length - markPatternDBComment.length) {
-        const lineSeg = line.substring(i, i + markPatternDBComment.length);
-        if (markPatternDBComment === lineSeg) {
-          i += markPatternDBComment.length;
+      if (line[i] === markPatternDBComment.pattern && i < line.length - 1) {
+        function isSpecialCharacter(char) {
+          return /[!@#$%^&*(),.?":{}|<>~\`\+\=\-\_\[\]\/\'\|\\]/.test(char);
+        }
+        if (isSpecialCharacter(line[i + 1])) {
+          resultList.push(
+            new MarkRange(
+              i + lineOffset,
+              i + lineOffset + 2,
+              markPatternDBComment
+            )
+          );
+          i += 1;
           continue;
         }
       }
@@ -306,7 +350,7 @@ function createRangeMarkList(textContent) {
         if (data.pattern === lineSeg) {
           const element = new SingleMarkElement(i + lineOffset, data);
           if (!findMatch(element)) {
-            singleMarkCharStack.push(element);
+            stk.push(element);
           }
           i += patternLength - 1;
           break;
@@ -316,45 +360,80 @@ function createRangeMarkList(textContent) {
   }
 
   const lines = textContent.split("\n");
-  const isLineUsed = new Array(lines.length).fill(false);
+  const isLineUsed = new Array(lines.length).fill(true);
   function scanLargeCodeBlock() {
-    let prevPos = -1;
+    let prevOffset = -1;
     let prevRow = -1;
-    let curPos = 0;
-    for (let curRow = 0; curRow < lines.length; curRow++) {
-      const line = lines[curRow];
-      const pattern = "```";
+    for (let row = 0, offset = 0; row < lines.length; row++) {
+      const line = lines[row];
+      const pattern = markDataDBCodeBlock.pattern;
       if (line === pattern) {
-        if (prevPos === -1) {
-          prevPos = curPos;
-          prevRow = curRow;
+        if (prevOffset === -1) {
+          prevOffset = offset;
+          prevRow = row;
         } else {
           resultList.push(
-            new MarkRange(
-              prevPos,
-              curPos + line.length,
-              new MarkData({
-                styleClass: "editor-code",
-                tag: "code",
-                containLineData: true,
-              })
-            )
+            new MarkRange(prevOffset, offset + line.length, markDataDBCodeBlock)
           );
           function addPattern(p) {
             resultList.push(
-              new MarkRange(p, p + 3, new MarkData({ pattern: "```" }))
+              new MarkRange(p, p + 3, new MarkData({ pattern: pattern }))
             );
           }
-          addPattern(prevPos);
-          addPattern(curPos);
-          isLineUsed.fill(true, prevRow, curRow + 1);
-          prevPos = -1;
+          addPattern(prevOffset);
+          addPattern(offset);
+          isLineUsed.fill(true, prevRow, row + 1);
+          prevOffset = -1;
         }
       }
-      curPos += line.length + 1;
+      offset += lines[row].length + 1;
     }
   }
   scanLargeCodeBlock();
+
+  // ==================
+  function scanListPattern(start) {
+    let prevOffset = -1;
+    let prevRow = -1;
+    let ok = false;
+    for (let row = 0, offset = 0; row < lines.length; row++) {
+      const line = lines[row];
+      const pattern = markDataDBList[0].pattern;
+      const patternLength = pattern.length;
+      if (patternLength < line.length) {
+        const lineSeg = line.substring(0, patternLength);
+        const space = line[patternLength].charCodeAt();
+        ok =
+          pattern === lineSeg &&
+          (space === 32 || space === 160) &&
+          !isLineUsed[row];
+      }
+      if (ok) {
+        isLineUsed[row] = true;
+        resultList.push(
+          new MarkRange(
+            offset,
+            offset + patternLength,
+            new MarkData({ pattern: pattern })
+            // spaceAfterPattern: 1,
+          )
+        );
+        if (prevOffset === -1) {
+          prevOffset = offset;
+          prevRow = row;
+        }
+      } else {
+        if (prevOffset !== -1) {
+          resultList.push(
+            new MarkRange(prevOffset, offset + line.length, markDataDBList[0])
+          );
+          prevOffset = -1;
+        }
+      }
+      offset += lines[row].length + 1;
+    }
+  }
+  scanListPattern(0);
 
   function scanSinglePattern() {
     let lineOffset = 0;
@@ -469,7 +548,6 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
     if (lo === hi && markNode.markData.isLineData) {
       DOMnode.appendChild(document.createElement("br"));
       searchCursorNode(DOMnode, lo - row, hi + 1 - row);
-      return;
     }
     let prevRow = row;
     if (markNode.markData.containLineData) {
@@ -525,6 +603,7 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
   deleteDOMChildren(DOMRootNode);
   addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, text.length, 0);
   setCursorPosition(targetNode, targetOffset);
+  console.log(markRootNode);
 }
 
 function deleteDOMChildren(node) {
@@ -621,6 +700,23 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, textContent) {
       );
     }
   }
+  function addDOMCodeBlockByMarkTree(markNode, DOMnode, lo) {
+    for (let i = 1; i < markNode.children.length - 1; i++) {
+      const markChild = markNode.children[i];
+      const childDOMNode = document.createElement("div");
+      if (markChild.lo === markChild.hi) {
+        DOMnode.appendChild(document.createElement("br"));
+      } else {
+        DOMnode.appendChild(
+          document.createTextNode(
+            textContent.substring(markChild.lo, markChild.hi)
+          )
+        );
+      }
+      DOMnode.appendChild(childDOMNode);
+      lo = markChild.hi;
+    }
+  }
   deleteDOMChildren(DOMRootNode);
 
   function isSingleLine(markNode) {
@@ -633,7 +729,11 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, textContent) {
       if (markChild.markData.containLineData) {
         const areaTag = document.createElement(markChild.markData.tag);
         DOMnode.appendChild(areaTag);
-        scanLineNodes(markChild, areaTag);
+        if (markChild.markData === markDataDBCodeBlock) {
+          addDOMCodeBlockByMarkTree(markChild, areaTag, markChild.lo);
+        } else {
+          scanLineNodes(markChild, areaTag);
+        }
         paragraphActiveFlag = false;
       } else {
         if (paragraphActiveFlag) {
