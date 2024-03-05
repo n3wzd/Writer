@@ -4,11 +4,12 @@
 }
 
 .center-content > .content-box {
-  flex: 0 0 50%;
+  flex: 1;
   max-width: 50%;
   box-sizing: border-box;
   border: 1px solid #ccc;
   padding: 10px;
+  word-break: break-all;
 }
 
 .editor-pattern {
