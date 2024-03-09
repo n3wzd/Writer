@@ -76,6 +76,7 @@ function CenterContent() {
     const rootMarkHTMLNode = createMarkTree(resultHTMLList, text);
     applyMarkTreeToEditorDOM(rootMarkEditorNode, divEditorRef.current, text);
     applyMarkTreeToHTMLDOM(rootMarkHTMLNode, divHTMLRef.current, text);
+    console.log(divHTMLRef.current);
   }
 
   function allowCompositeEditorDOM(event) {
@@ -85,7 +86,7 @@ function CenterContent() {
   return (
     <>
       <div className="center-content">
-        <div
+        <pre
           className="content-box"
           ref={divEditorRef}
           contentEditable={true}
@@ -94,7 +95,7 @@ function CenterContent() {
           onCompositionEnd={handleCompositionEnd}
           onKeyDown={handleKeyDown}
         />
-        <div className="content-box" ref={divHTMLRef} />
+        <pre className="content-box" ref={divHTMLRef} />
       </div>
       <span ref={textPosDisplayRef} />
     </>
@@ -108,7 +109,7 @@ class MarkData {
     pattern = "",
     tag = "",
     isDouble = false,
-    spaceAfterPattern = 0,
+    leftPatternBonus = 0,
     applyEffectOnPattern = false,
     lineData = false,
     multiLineData = false,
@@ -118,13 +119,13 @@ class MarkData {
     this.pattern = pattern;
     this.tag = tag;
     this.isDouble = isDouble;
-    this.spaceAfterPattern = spaceAfterPattern;
+    this.leftPatternBonus = leftPatternBonus;
     this.applyEffectOnPattern = applyEffectOnPattern;
     this.lineData = lineData;
     this.multiLineData = multiLineData;
   }
   get leftPatternLength() {
-    return this.pattern.length + this.spaceAfterPattern;
+    return this.pattern.length + this.leftPatternBonus;
   }
   get rightPatternLength() {
     return this.isDouble ? this.pattern.length : 0;
@@ -171,43 +172,43 @@ const markDataDBSingle = [
     pattern: "#",
     tag: "h1",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: "##",
     tag: "h2",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: "###",
     tag: "h3",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: "####",
     tag: "h4",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: "#####",
     tag: "h5",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: "######",
     tag: "h6",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
   new MarkData({
     pattern: ">",
     tag: "blockquote",
     applyEffectOnPattern: true,
-    spaceAfterPattern: 1,
+    leftPatternBonus: 1,
   }),
 ];
 const markDataDBDouble = [
@@ -274,7 +275,14 @@ const markDataDBUList = new MarkData({
 const markDataDBUListItem = new MarkData({
   pattern: "-",
   tag: "li",
-  spaceAfterPattern: 1,
+});
+const markDataDBOList = new MarkData({
+  tag: "ol",
+  multiLineData: true,
+});
+const markDataDBOListItem = new MarkData({
+  pattern: "1.",
+  tag: "li",
 });
 const markPatternDBComment = new MarkData({
   styleClass: "editor-comment",
@@ -287,21 +295,25 @@ const lineCntAttributeName = "data-line-cnt";
 function createRangeMarkList(textContent) {
   const [resultEditorList, resultHTMLList] = [[], []];
   const lines = textContent.split("\n");
-  const isLineUsed = new Array(lines.length).fill(false);
+  const applyLinePattern = new Array(lines.length).fill(true);
   const paragraphSep = [-1, lines.length];
-  const lineOffsetDB = new Array(lines.length);
+  const lineOffsetDB = [0];
   function addMarkData(lo, hi, markData) {
     const range = new MarkRange(lo, hi, markData);
     resultEditorList.push(range);
     resultHTMLList.push(range);
   }
+  for (let row = 1; row < lines.length; row++) {
+    lineOffsetDB[row] = lineOffsetDB[row - 1] + lines[row - 1].length + 1;
+  }
 
   function scanLargeCodeBlock() {
     let prevOffset = -1;
     let prevRow = -1;
-    for (let row = 0, offset = 0; row < lines.length; row++) {
+    for (let row = 0; row < lines.length; row++) {
       const line = lines[row];
       const pattern = markDataDBCodeBlockPattern;
+      const offset = lineOffsetDB[row];
       if (line === pattern) {
         if (prevOffset === -1) {
           prevOffset = offset;
@@ -315,51 +327,95 @@ function createRangeMarkList(textContent) {
           addPattern(offset);
           paragraphSep.push(prevRow);
           paragraphSep.push(row);
-          isLineUsed.fill(true, prevRow, row + 1);
+          applyLinePattern.fill(false, prevRow, row + 1);
           prevOffset = -1;
         }
       }
-      offset += lines[row].length + 1;
     }
   }
   scanLargeCodeBlock();
 
-  function scanListPattern(baseOffset) {
-    let prevOffset = -1;
-    let prevRow = -1;
-    let ok = false;
-    for (let row = 0, offset = 0; row < lines.length; row++) {
+  function scanListPattern() {
+    const usedLine = new Array(lines.length).fill(false);
+    const listData = [markDataDBUList, markDataDBOList];
+    const listItem = [markDataDBUListItem, markDataDBOListItem];
+    let row = 0;
+    function detectListPattern(depth, type) {
       const line = lines[row];
-      const pattern = markDataDBUListItem.pattern;
-      const patternLength = pattern.length;
-      if (patternLength < line.length) {
-        const lineSeg = line.substring(0, patternLength);
-        const space = line[patternLength].charCodeAt();
-        ok =
+      const pattern = listItem[type].pattern;
+      function detectTap() {
+        let ok = true;
+        for (let i = 0; i < depth; i++) {
+          ok = ok && line[i] === "\t";
+        }
+        return ok;
+      }
+      if (depth + pattern.length < line.length) {
+        const lineSeg = line.substring(depth, depth + pattern.length);
+        const space = line[depth + pattern.length].charCodeAt();
+        return (
           pattern === lineSeg &&
           (space === 32 || space === 160) &&
-          !isLineUsed[row];
+          applyLinePattern[row] &&
+          detectTap()
+        );
       }
-      if (ok) {
-        isLineUsed[row] = true;
-        addMarkData(offset, offset + line.length, markDataDBUListItem);
-        if (prevOffset === -1) {
-          prevOffset = offset;
-          prevRow = row;
-        }
-      } else {
-        if (prevOffset !== -1) {
-          addMarkData(prevOffset, offset + line.length, markDataDBUList);
-          prevOffset = -1;
-          for (let i = prevRow; i <= row; i++) {
-            paragraphSep.push(i);
+      return false;
+    }
+    function scanLine(depth, type) {
+      const listLo = row;
+      function unleashStack() {
+        const listHi = row;
+        console.log(`lo: ${listLo}, hi: ${listHi}, depth: ${depth}`);
+        resultHTMLList.push(
+          new MarkRange(
+            lineOffsetDB[listLo],
+            lineOffsetDB[listHi] + lines[listHi].length,
+            listData[type]
+          )
+        );
+        for (let r = listLo; r <= listHi; r++) {
+          if (!usedLine[r]) {
+            addMarkData(
+              lineOffsetDB[r],
+              lineOffsetDB[r] + lines[r].length,
+              new MarkData({
+                pattern: listItem[type].pattern,
+                tag: listItem[type].tag,
+                leftPatternBonus: depth + 1,
+              })
+            );
+            usedLine[r] = true;
+            paragraphSep.push(r);
           }
         }
       }
-      offset += lines[row].length + 1;
+      for (; row < lines.length; row++) {
+        let isNext = false;
+        for (let t = 0; t < listData.length; t++) {
+          if (detectListPattern(depth + 1, t)) {
+            scanLine(depth + 1, t);
+            isNext = true;
+          }
+        }
+        if (!isNext && !detectListPattern(depth, type)) {
+          row--;
+          unleashStack();
+          return;
+        }
+      }
+      row--;
+      unleashStack();
+    }
+    for (; row < lines.length; row++) {
+      for (let t = 0; t < listData.length; t++) {
+        if (detectListPattern(0, t)) {
+          scanLine(0, t);
+        }
+      }
     }
   }
-  scanListPattern(0);
+  scanListPattern();
 
   function scanDoublePatternInLine(line, lineOffset) {
     class Item {
@@ -451,10 +507,10 @@ function createRangeMarkList(textContent) {
     }
   }
   function scanAllLine() {
-    let lineOffset = 0;
     for (let row = 0; row < lines.length; row++) {
+      const lineOffset = lineOffsetDB[row];
       const line = lines[row];
-      if (!isLineUsed[row]) {
+      if (applyLinePattern[row]) {
         scanSingleLine(line, lineOffset, row);
       }
       resultEditorList.push(
@@ -466,8 +522,6 @@ function createRangeMarkList(textContent) {
           })
         )
       );
-      lineOffsetDB[row] = lineOffset;
-      lineOffset += lines[row].length + 1;
     }
   }
   scanAllLine();
@@ -501,9 +555,9 @@ function createRangeMarkList(textContent) {
         ? x.lo - y.lo
         : x.hi !== y.hi
         ? y.hi - x.hi
-        : x.lineData
-        ? 1
-        : -1
+        : x.markData.lineData || x.markData.multiLineData
+        ? -1
+        : 1
     );
   }
   sortList(resultEditorList);
