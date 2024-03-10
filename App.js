@@ -76,7 +76,6 @@ function CenterContent() {
     const rootMarkHTMLNode = createMarkTree(resultHTMLList, text);
     applyMarkTreeToEditorDOM(rootMarkEditorNode, divEditorRef.current, text);
     applyMarkTreeToHTMLDOM(rootMarkHTMLNode, divHTMLRef.current, text);
-    console.log(divHTMLRef.current);
   }
 
   function allowCompositeEditorDOM(event) {
@@ -112,7 +111,7 @@ class MarkData {
     leftPatternBonus = 0,
     applyEffectOnPattern = false,
     lineData = false,
-    multiLineData = false,
+    imgData = null,
   }) {
     this.stylePrefix = "editor-";
     this.styleClass = styleClass === null ? this.stylePrefix + tag : styleClass;
@@ -122,7 +121,7 @@ class MarkData {
     this.leftPatternBonus = leftPatternBonus;
     this.applyEffectOnPattern = applyEffectOnPattern;
     this.lineData = lineData;
-    this.multiLineData = multiLineData;
+    this.imgData = imgData;
   }
   get leftPatternLength() {
     return this.pattern.length + this.leftPatternBonus;
@@ -262,15 +261,12 @@ const markDataDBOnlyLine = [
     tag: "hr",
   }),
 ];
-
 const markDataDBCodeBlock = new MarkData({
   tag: "code",
-  multiLineData: true,
 });
 const markDataDBCodeBlockPattern = "```";
 const markDataDBUList = new MarkData({
   tag: "ul",
-  multiLineData: true,
 });
 const markDataDBUListItem = new MarkData({
   pattern: "-",
@@ -278,19 +274,34 @@ const markDataDBUListItem = new MarkData({
 });
 const markDataDBOList = new MarkData({
   tag: "ol",
-  multiLineData: true,
 });
 const markDataDBOListItem = new MarkData({
   pattern: "1.",
   tag: "li",
+});
+const markDataDBTableBasis = new MarkData({
+  pattern: "|",
+});
+const markDataDBTable = new MarkData({
+  tag: "table",
+});
+const markDataDBThead = new MarkData({
+  tag: "thead",
+});
+const markDataDBTbody = new MarkData({
+  tag: "tbody",
+});
+const markDataDBTr = new MarkData({
+  tag: "tr",
+});
+const markDataDBTd = new MarkData({
+  tag: "td",
 });
 const markPatternDBComment = new MarkData({
   styleClass: "editor-comment",
   pattern: "\\",
   tag: "span",
 });
-const lineBaseAttributeName = "data-line-base";
-const lineCntAttributeName = "data-line-cnt";
 
 function createRangeMarkList(textContent) {
   const [resultEditorList, resultHTMLList] = [[], []];
@@ -319,7 +330,9 @@ function createRangeMarkList(textContent) {
           prevOffset = offset;
           prevRow = row;
         } else {
-          addMarkData(prevOffset, offset + line.length, markDataDBCodeBlock);
+          resultHTMLList.push(
+            new MarkRange(prevOffset, offset + line.length, markDataDBCodeBlock)
+          );
           function addPattern(p) {
             addMarkData(p, p + 3, new MarkData({ pattern: pattern }));
           }
@@ -340,9 +353,12 @@ function createRangeMarkList(textContent) {
     const listData = [markDataDBUList, markDataDBOList];
     const listItem = [markDataDBUListItem, markDataDBOListItem];
     let row = 0;
-    function detectListPattern(depth, type) {
+    function getItemPattern(type, order) {
+      return type === 1 ? `${order}.` : listItem[type].pattern;
+    }
+    function detectListPattern(depth, type, order = 1) {
       const line = lines[row];
-      const pattern = listItem[type].pattern;
+      const pattern = getItemPattern(type, order);
       function detectTap() {
         let ok = true;
         for (let i = 0; i < depth; i++) {
@@ -364,9 +380,8 @@ function createRangeMarkList(textContent) {
     }
     function scanLine(depth, type) {
       const listLo = row;
-      function unleashStack() {
-        const listHi = row;
-        console.log(`lo: ${listLo}, hi: ${listHi}, depth: ${depth}`);
+      function applyResult() {
+        const listHi = --row;
         resultHTMLList.push(
           new MarkRange(
             lineOffsetDB[listLo],
@@ -380,7 +395,7 @@ function createRangeMarkList(textContent) {
               lineOffsetDB[r],
               lineOffsetDB[r] + lines[r].length,
               new MarkData({
-                pattern: listItem[type].pattern,
+                pattern: getItemPattern(type, r - listLo + 1),
                 tag: listItem[type].tag,
                 leftPatternBonus: depth + 1,
               })
@@ -391,21 +406,19 @@ function createRangeMarkList(textContent) {
         }
       }
       for (; row < lines.length; row++) {
-        let isNext = false;
+        let isNewList = false;
         for (let t = 0; t < listData.length; t++) {
           if (detectListPattern(depth + 1, t)) {
             scanLine(depth + 1, t);
-            isNext = true;
+            isNewList = true;
           }
         }
-        if (!isNext && !detectListPattern(depth, type)) {
-          row--;
-          unleashStack();
+        if (!isNewList && !detectListPattern(depth, type, row - listLo + 1)) {
+          applyResult();
           return;
         }
       }
-      row--;
-      unleashStack();
+      applyResult();
     }
     for (; row < lines.length; row++) {
       for (let t = 0; t < listData.length; t++) {
@@ -417,14 +430,114 @@ function createRangeMarkList(textContent) {
   }
   scanListPattern();
 
-  function scanDoublePatternInLine(line, lineOffset) {
+  function scanTablePattern() {
+    function getTdFromCenter(row) {
+      if (applyLinePattern[row]) {
+        const items = lines[row].split(markDataDBTableBasis.pattern);
+        if (items.length > 1) {
+          let ok = items[0] === "" && items[items.length - 1] === "";
+          for (let i = 1; i < items.length - 1; i++) {
+            ok = ok && items[i] === "---";
+          }
+          if (ok) {
+            return items.length - 2;
+          }
+        }
+      }
+      return 0;
+    }
+    function detectRowIntegrity(row, td) {
+      if (applyLinePattern[row]) {
+        const items = lines[row].split(markDataDBTableBasis.pattern);
+        if (items.length > 1) {
+          return (
+            items[0] === "" &&
+            items[items.length - 1] === "" &&
+            items.length - 2 === td
+          );
+        }
+      }
+      return false;
+    }
+    function getBodyHeight(base, td) {
+      let row = base;
+      for (; row < lines.length; row++) {
+        if (!detectRowIntegrity(row, td)) {
+          break;
+        }
+      }
+      return row - base;
+    }
+    function applyResult(baseRow, td, bodyHeight) {
+      const tableLo = baseRow - 1;
+      const tableHi = baseRow + bodyHeight;
+      function addLineToHTML(lo, hi, data) {
+        resultHTMLList.push(
+          new MarkRange(
+            lineOffsetDB[lo],
+            lineOffsetDB[hi] + lines[hi].length,
+            data
+          )
+        );
+      }
+      addLineToHTML(tableLo, tableHi, markDataDBTable);
+      addLineToHTML(tableLo, tableLo, markDataDBThead);
+      addLineToHTML(baseRow, tableHi, markDataDBTbody);
+      for (let row = tableLo; row <= tableHi; row++) {
+        if (row === baseRow) {
+          continue;
+        }
+        paragraphSep.push(row);
+        addLineToHTML(row, row, markDataDBTr);
+        const items = lines[row].split(markDataDBTableBasis.pattern);
+        let col = lineOffsetDB[row] + 1;
+        for (let i = 1; i < items.length - 1; i++) {
+          resultHTMLList.push(
+            new MarkRange(col, col + items[i].length, markDataDBTd)
+          );
+          col += items[i].length + 1;
+        }
+      }
+      for (let row = tableLo; row <= tableHi; row++) {
+        if (row === baseRow) {
+          addMarkData(
+            lineOffsetDB[row],
+            lineOffsetDB[row] + lines[row].length,
+            new MarkData({ pattern: lines[row] })
+          );
+          continue;
+        }
+        const regex = /\|/g;
+        let match;
+        while ((match = regex.exec(lines[row])) !== null) {
+          const pos = lineOffsetDB[row] + match.index;
+          addMarkData(pos, pos + 1, markDataDBTableBasis);
+        }
+      }
+    }
+    for (let row = 1; row < lines.length; row++) {
+      const td = getTdFromCenter(row);
+      if (td > 0) {
+        const isHead = detectRowIntegrity(row - 1, td);
+        const bodyHeight = getBodyHeight(row + 1, td);
+        if (bodyHeight > 0 && isHead) {
+          applyResult(row, td, bodyHeight);
+          row += bodyHeight;
+        }
+      }
+    }
+  }
+  scanTablePattern();
+
+  function scanDoublePatternInLine(row) {
+    const line = lines[row];
+    const stk = [];
     class Item {
       constructor(pos, markData) {
         this.pos = pos;
         this.markData = markData;
       }
     }
-    const stk = [];
     function findMatch(item) {
       let matched = false;
       let idx = stk.length - 1;
@@ -452,7 +565,7 @@ function createRangeMarkList(textContent) {
           return /[!@#$%^&*(),.?":{}|<>~\`\+\=\-\_\[\]\/\'\|\\]/.test(char);
         }
         if (isSpecialCharacter(line[i + 1])) {
-          const lo = i + lineOffset;
+          const lo = i + lineOffsetDB[row];
           addMarkData(lo, lo + 2, markPatternDBComment);
           i += 1;
           continue;
@@ -465,7 +578,7 @@ function createRangeMarkList(textContent) {
         }
         const lineSeg = line.substring(i, i + patternLength);
         if (data.pattern === lineSeg) {
-          const item = new Item(i + lineOffset, data);
+          const item = new Item(i + lineOffsetDB[row], data);
           if (!findMatch(item)) {
             stk.push(item);
           }
@@ -475,34 +588,83 @@ function createRangeMarkList(textContent) {
       }
     }
   }
-  function scanOnlyLinePatternInLine(line, lineOffset, row) {
+  function scanOnlyLinePatternInLine(row) {
+    const line = lines[row];
     for (const data of markDataDBOnlyLine) {
       const patternLength = data.pattern.length;
       const lineSeg = line.substring(0, patternLength);
       if (data.pattern === lineSeg) {
-        addMarkData(lineOffset, lineOffset + line.length, data);
+        addMarkData(lineOffsetDB[row], lineOffsetDB[row] + line.length, data);
         paragraphSep.push(row);
       }
     }
   }
-  function scanSinglePatternInLine(line, lineOffset, row) {
+  function scanSinglePatternInLine(row) {
+    const line = lines[row];
     for (const data of markDataDBSingle) {
       const patternLength = data.pattern.length;
       if (patternLength + 1 <= line.length) {
         const lineSeg = line.substring(0, patternLength);
         const space = line[patternLength].charCodeAt();
         if (data.pattern === lineSeg && (space === 32 || space === 160)) {
-          addMarkData(lineOffset, lineOffset + line.length, data);
+          addMarkData(lineOffsetDB[row], lineOffsetDB[row] + line.length, data);
           paragraphSep.push(row);
         }
       }
     }
   }
-  function scanSingleLine(line, lineOffset, row) {
-    scanOnlyLinePatternInLine(line, lineOffset);
-    scanSinglePatternInLine(line, lineOffset, row);
-    scanDoublePatternInLine(line, lineOffset, row);
-    if (line.length === 0) {
+  function scanImagePatternInLine(row) {
+    const line = lines[row];
+    if (line[0] !== "!" || line[1] !== "[") {
+      return;
+    }
+    let i = 2;
+    for (; i < line.length; i++) {
+      if (line[i] === "]") {
+        break;
+      }
+    }
+    if (line[i + 1] !== "(") {
+      return;
+    }
+    const centerPos = i;
+    for (i += 2; i < line.length; i++) {
+      if (line[i] === ")") {
+        break;
+      }
+    }
+    if (i !== line.length - 1) {
+      return;
+    }
+    const start = lineOffsetDB[row];
+    resultHTMLList.push(
+      new MarkRange(
+        start,
+        start + line.length,
+        new MarkData({
+          tag: "img",
+          imgData: {
+            src: line.substring(centerPos + 2, line.length - 1),
+            alt: line.substring(2, centerPos),
+          },
+        })
+      )
+    );
+    addMarkData(
+      start,
+      start + line.length,
+      new MarkData({
+        pattern: line,
+      })
+    );
+    paragraphSep.push(row);
+  }
+  function scanSingleLine(row) {
+    scanOnlyLinePatternInLine(row);
+    scanSinglePatternInLine(row);
+    scanImagePatternInLine(row);
+    scanDoublePatternInLine(row);
+    if (lines[row].length === 0) {
       paragraphSep.push(row);
     }
   }
@@ -511,7 +673,7 @@ function createRangeMarkList(textContent) {
       const lineOffset = lineOffsetDB[row];
       const line = lines[row];
       if (applyLinePattern[row]) {
-        scanSingleLine(line, lineOffset, row);
+        scanSingleLine(row);
       }
       resultEditorList.push(
         new MarkRange(
@@ -529,16 +691,16 @@ function createRangeMarkList(textContent) {
   function scanParagraphPattern() {
     paragraphSep.sort((a, b) => a - b);
     for (let p = 0; p < paragraphSep.length - 1; p++) {
-      const [loR, hiR] = [paragraphSep[p] + 1, paragraphSep[p + 1] - 1];
-      if (hiR - loR >= 0) {
+      const [rowLo, rowHi] = [paragraphSep[p] + 1, paragraphSep[p + 1] - 1];
+      if (rowHi - rowLo >= 0) {
         resultHTMLList.push(
           new MarkRange(
-            lineOffsetDB[loR],
-            lineOffsetDB[hiR] + lines[hiR].length,
+            lineOffsetDB[rowLo],
+            lineOffsetDB[rowHi] + lines[rowHi].length,
             new MarkData({ tag: "p" })
           )
         );
-        for (let r = loR; r < hiR; r++) {
+        for (let r = rowLo; r < rowHi; r++) {
           const pos = lineOffsetDB[r] + lines[r].length + 1;
           resultHTMLList.push(
             new MarkRange(pos, pos, new MarkData({ tag: "br" }))
@@ -555,7 +717,7 @@ function createRangeMarkList(textContent) {
         ? x.lo - y.lo
         : x.hi !== y.hi
         ? y.hi - x.hi
-        : x.markData.lineData || x.markData.multiLineData
+        : x.markData.lineData
         ? -1
         : 1
     );
@@ -610,25 +772,17 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
       targetOffset = cursorPos.offset - lo;
     }
   }
-
   function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
     if (lo === hi && markNode.markData.lineData) {
       DOMnode.appendChild(document.createElement("br"));
       searchCursorNode(DOMnode, lo - row, hi + 1 - row);
     }
-    const prevRow = row;
-    if (markNode.markData.multiLineData) {
-      DOMnode.setAttribute(lineBaseAttributeName, row);
-    }
-
     for (const markChild of markNode.children) {
       if (lo < markChild.lo) {
         appendTextNode(DOMnode, lo, markChild.lo);
       }
       const childDOMNode = document.createElement(
-        markChild.markData.lineData || markChild.markData.multiLineData
-          ? "div"
-          : "span"
+        markChild.markData.lineData ? "div" : "span"
       );
       if (markChild.markData.hasStyle) {
         childDOMNode.setAttribute("class", markChild.markData.styleClass);
@@ -664,10 +818,6 @@ function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
     if (lo < hi) {
       appendTextNode(DOMnode, lo, hi);
     }
-
-    if (markNode.markData.multiLineData) {
-      DOMnode.setAttribute(lineCntAttributeName, row - prevRow);
-    }
   }
   deleteDOMChildren(DOMRootNode);
   addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, text.length);
@@ -696,16 +846,12 @@ function getCursorPosition(rootDOMNode, text) {
     if (!(parentNode instanceof Element)) {
       return;
     }
-    if (parentNode.hasAttribute(lineBaseAttributeName)) {
-      row = parseInt(parentNode.getAttribute(lineBaseAttributeName));
+    if (parentNode === rootDOMNode) {
       const children = parentNode.childNodes;
-      for (let i = 0; i < children.length; i++) {
-        if (children[i] === node) {
+      for (; row < children.length; row++) {
+        if (children[row] === node) {
           break;
         }
-        row += children[i].hasAttribute(lineCntAttributeName)
-          ? parseInt(children[i].getAttribute(lineCntAttributeName))
-          : 1;
       }
       return;
     }
@@ -757,6 +903,10 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, text) {
         appendTextNode(DOMnode, lo, markChild.lo);
       }
       const childDOMNode = document.createElement(markChild.markData.tag);
+      if (markChild.markData.imgData !== null) {
+        childDOMNode.setAttribute("src", markChild.markData.imgData.src);
+        childDOMNode.setAttribute("alt", markChild.markData.imgData.alt);
+      }
       addDOMNodeByMarkTree(
         markChild,
         childDOMNode,
