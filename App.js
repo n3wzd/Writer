@@ -29,20 +29,24 @@ function CenterContent() {
   const divEditorRef = useRef();
   const divHTMLRef = useRef();
   const textPosDisplayRef = useRef();
-  let cursorPosition = new TextPosition();
+  const undoDataStk = [];
+  const redoDataStk = [];
+  // const backupTime = 2000;
+  // let backupTimeID = null;
 
   function handleInputChange(event) {
     if (allowCompositeEditorDOM(event)) {
-      updateEditorDOM(compatibleLineBreak(event.target.innerText));
+      inputChange(event.target.innerText);
     }
   }
 
   function handleSelectChange(event) {
-    updateCursorPosition(compatibleLineBreak(event.target.innerText));
+    const text = compatibleLineBreak(event.target.innerText);
+    updateCursorDisplay(text, getCursorPosition(divEditorRef.current, text));
   }
 
   function handleCompositionEnd(event) {
-    updateEditorDOM(compatibleLineBreak(event.target.innerText));
+    inputChange(event.target.innerText);
   }
 
   function handleKeyDown(event) {
@@ -61,20 +65,50 @@ function CenterContent() {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
+    } else if (event.ctrlKey && event.key === "z") {
+      event.preventDefault();
+      const backupData =
+        undoDataStk.length > 0 ? undoDataStk.pop() : new BackupData();
+      const newText = backupData.text;
+      const cursorPos = backupData.cursorPosition;
+      updateEditorDOM(newText, cursorPos);
+      updateCursorDisplay(newText, cursorPos);
+      redoDataStk.push(backupData);
+    } else if (event.ctrlKey && event.shiftKey && event.key === "z") {
+      event.preventDefault();
+      const backupData =
+        redoDataStk.length > 0 ? redoDataStk.pop() : new BackupData();
+      const newText = backupData.text;
+      const cursorPos = backupData.cursorPosition;
+      updateEditorDOM(newText, cursorPos);
+      updateCursorDisplay(newText, cursorPos);
+      undoDataStk.push(backupData);
     }
   }
 
-  function updateCursorPosition(text) {
-    cursorPosition = getCursorPosition(divEditorRef.current, text);
-    textPosDisplayRef.current.innerText = `row: ${cursorPosition.row}, column: ${cursorPosition.column}`;
-    return cursorPosition;
+  function inputChange(text) {
+    const newText = compatibleLineBreak(text);
+    const cursorPos = getCursorPosition(divEditorRef.current, text);
+    updateEditorDOM(newText, cursorPos);
+    updateCursorDisplay(text, cursorPos);
+    undoDataStk.push(new BackupData(text, cursorPos));
+    redoDataStk.length = 0;
   }
 
-  function updateEditorDOM(text) {
+  function updateCursorDisplay(text, pos) {
+    textPosDisplayRef.current.innerText = `row: ${pos.row}, column: ${pos.column}`;
+  }
+
+  function updateEditorDOM(text, cursorPos) {
     const [resultEditorList, resultHTMLList] = createRangeMarkList(text);
     const rootMarkEditorNode = createMarkTree(resultEditorList, text);
     const rootMarkHTMLNode = createMarkTree(resultHTMLList, text);
-    applyMarkTreeToEditorDOM(rootMarkEditorNode, divEditorRef.current, text);
+    applyMarkTreeToEditorDOM(
+      rootMarkEditorNode,
+      divEditorRef.current,
+      text,
+      cursorPos
+    );
     applyMarkTreeToHTMLDOM(rootMarkHTMLNode, divHTMLRef.current, text);
   }
 
@@ -163,6 +197,13 @@ class TextPosition {
     this.row = row;
     this.column = column;
     this.offset = offset;
+  }
+}
+
+class BackupData {
+  constructor(text = "", cursorPosition = new TextPosition()) {
+    this.text = text;
+    this.cursorPosition = cursorPosition;
   }
 }
 
@@ -380,6 +421,7 @@ function createRangeMarkList(textContent) {
     }
     function scanLine(depth, type) {
       const listLo = row;
+      let innerListWeight = 0;
       function applyResult() {
         const listHi = --row;
         resultHTMLList.push(
@@ -409,16 +451,20 @@ function createRangeMarkList(textContent) {
         let isNewList = false;
         for (let t = 0; t < listData.length; t++) {
           if (detectListPattern(depth + 1, t)) {
-            scanLine(depth + 1, t);
+            innerListWeight += scanLine(depth + 1, t);
             isNewList = true;
           }
         }
-        if (!isNewList && !detectListPattern(depth, type, row - listLo + 1)) {
+        if (
+          !isNewList &&
+          !detectListPattern(depth, type, row - listLo + 1 - innerListWeight)
+        ) {
           applyResult();
-          return;
+          return row - listLo + 1;
         }
       }
       applyResult();
+      return row - listLo + 1;
     }
     for (; row < lines.length; row++) {
       for (let t = 0; t < listData.length; t++) {
@@ -749,8 +795,7 @@ function createMarkTree(markList, text) {
   return rootNode;
 }
 
-function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text) {
-  const cursorPos = getCursorPosition(DOMRootNode, text);
+function applyMarkTreeToEditorDOM(markRootNode, DOMRootNode, text, cursorPos) {
   let targetNode,
     targetOffset,
     row = 0;
@@ -836,30 +881,31 @@ function getCursorPosition(rootDOMNode, text) {
     return new TextPosition();
   }
   const range = window.getSelection().getRangeAt(0);
+  const lines = text.split("\n");
+
+  function getRow() {
+    const tempRange = range.cloneRange();
+    const textNode = document.createTextNode("1");
+    tempRange.collapse(true);
+    tempRange.insertNode(textNode);
+
+    const newLines = compatibleLineBreak(rootDOMNode.innerText).split("\n");
+    let row = 0;
+    for (; row < lines.length; row++) {
+      if (newLines[row] !== lines[row]) {
+        break;
+      }
+    }
+    tempRange.selectNode(textNode);
+    tempRange.deleteContents();
+    return row;
+  }
+
+  const row = getRow();
   const tempRange = range.cloneRange();
   tempRange.selectNodeContents(rootDOMNode);
   tempRange.setEnd(range.endContainer, range.endOffset);
 
-  let row = 0;
-  function trackParent(node) {
-    const parentNode = node.parentNode;
-    if (!(parentNode instanceof Element)) {
-      return;
-    }
-    if (parentNode === rootDOMNode) {
-      const children = parentNode.childNodes;
-      for (; row < children.length; row++) {
-        if (children[row] === node) {
-          break;
-        }
-      }
-      return;
-    }
-    trackParent(node.parentNode);
-  }
-  trackParent(range.endContainer);
-
-  const lines = text.split("\n");
   const offset = tempRange.toString().length;
   let column = offset;
   for (let i = 0; i < row; i++) {
