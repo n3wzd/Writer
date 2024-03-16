@@ -29,10 +29,12 @@ function CenterContent() {
   const divEditorRef = useRef();
   const divHTMLRef = useRef();
   const textPosDisplayRef = useRef();
-  const undoDataStk = [];
-  const redoDataStk = [];
-  // const backupTime = 2000;
-  // let backupTimeID = null;
+
+  let curEditorState = new EditorState();
+  const undoStateStk = [];
+  const redoStateStk = [];
+  const undoTime = 500;
+  let undoTimeID = null;
 
   function handleInputChange(event) {
     if (allowCompositeEditorDOM(event)) {
@@ -42,7 +44,7 @@ function CenterContent() {
 
   function handleSelectChange(event) {
     const text = compatibleLineBreak(event.target.innerText);
-    updateCursorDisplay(text, getCursorPosition(divEditorRef.current, text));
+    updateCursorDisplay(getCursorPosition(divEditorRef.current, text));
   }
 
   function handleCompositionEnd(event) {
@@ -50,6 +52,7 @@ function CenterContent() {
   }
 
   function handleKeyDown(event) {
+    const keyinputZ = ["z", "Z"].includes(event.key);
     if (event.key === "Tab") {
       event.preventDefault();
       if (!window.getSelection().rangeCount > 0) {
@@ -65,37 +68,54 @@ function CenterContent() {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
-    } else if (event.ctrlKey && event.key === "z") {
+    } else if (event.ctrlKey && event.shiftKey && keyinputZ) {
       event.preventDefault();
-      const backupData =
-        undoDataStk.length > 0 ? undoDataStk.pop() : new BackupData();
-      const newText = backupData.text;
-      const cursorPos = backupData.cursorPosition;
-      updateEditorDOM(newText, cursorPos);
-      updateCursorDisplay(newText, cursorPos);
-      redoDataStk.push(backupData);
-    } else if (event.ctrlKey && event.shiftKey && event.key === "z") {
+      if (redoStateStk.length > 0) {
+        const curText = compatibleLineBreak(divEditorRef.current.innerText);
+        const cursorPos = getCursorPosition(divEditorRef.current, curText);
+        undoStateStk.push(new EditorState(curText, cursorPos));
+
+        const { text: newText, cursorPosition: newPos } = redoStateStk.pop();
+        updateEditorDOM(newText, newPos);
+        updateCursorDisplay(newPos);
+        curEditorState = new EditorState(newText, newPos);
+      }
+    } else if (event.ctrlKey && keyinputZ) {
       event.preventDefault();
-      const backupData =
-        redoDataStk.length > 0 ? redoDataStk.pop() : new BackupData();
-      const newText = backupData.text;
-      const cursorPos = backupData.cursorPosition;
-      updateEditorDOM(newText, cursorPos);
-      updateCursorDisplay(newText, cursorPos);
-      undoDataStk.push(backupData);
+      if (undoStateStk.length > 0) {
+        const curText = compatibleLineBreak(divEditorRef.current.innerText);
+        const cursorPos = getCursorPosition(divEditorRef.current, curText);
+        redoStateStk.push(new EditorState(curText, cursorPos));
+
+        const { text: newText, cursorPosition: newPos } = undoStateStk.pop();
+        updateEditorDOM(newText, newPos);
+        updateCursorDisplay(newPos);
+        curEditorState = new EditorState(newText, newPos);
+      }
     }
   }
 
   function inputChange(text) {
     const newText = compatibleLineBreak(text);
-    const cursorPos = getCursorPosition(divEditorRef.current, text);
+    const cursorPos = getCursorPosition(divEditorRef.current, newText);
     updateEditorDOM(newText, cursorPos);
-    updateCursorDisplay(text, cursorPos);
-    undoDataStk.push(new BackupData(text, cursorPos));
-    redoDataStk.length = 0;
+    updateCursorDisplay(cursorPos);
+
+    if (undoTimeID !== null) {
+      clearTimeout(undoTimeID);
+    } else {
+      undoStateStk.push(
+        new EditorState(curEditorState.text, curEditorState.cursorPosition)
+      );
+    }
+    undoTimeID = setTimeout(() => {
+      undoTimeID = null;
+    }, undoTime);
+    curEditorState = new EditorState(newText, cursorPos);
+    redoStateStk.length = 0;
   }
 
-  function updateCursorDisplay(text, pos) {
+  function updateCursorDisplay(pos) {
     textPosDisplayRef.current.innerText = `row: ${pos.row}, column: ${pos.column}`;
   }
 
@@ -200,7 +220,7 @@ class TextPosition {
   }
 }
 
-class BackupData {
+class EditorState {
   constructor(text = "", cursorPosition = new TextPosition()) {
     this.text = text;
     this.cursorPosition = cursorPosition;
@@ -886,7 +906,6 @@ function getCursorPosition(rootDOMNode, text) {
   function getRow() {
     const tempRange = range.cloneRange();
     const textNode = document.createTextNode("1");
-    tempRange.collapse(true);
     tempRange.insertNode(textNode);
 
     const newLines = compatibleLineBreak(rootDOMNode.innerText).split("\n");

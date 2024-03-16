@@ -12,6 +12,11 @@
   word-break: break-all;
 }
 
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .editor-pattern {
   color: #999;
 }
