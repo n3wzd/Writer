@@ -1,31 +1,29 @@
 import React, { useRef } from "react";
 import "./App.css";
 
+class EditorFile {
+  constructor(name = "", text = "") {
+    this.name = name;
+    this.text = text;
+  }
+}
+
+class EditorDirectory {
+  constructor(name = "") {
+    this.name = name;
+    this.files = [];
+  }
+}
+
 const defaultTitle = "New Document";
+const mainDirectory = new EditorDirectory();
 
 export default function App() {
   return <Center />;
 }
 
 function Center() {
-  return (
-    <>
-      <CenterTitle />
-      <CenterContent />
-    </>
-  );
-}
-
-function CenterTitle() {
-  let text = defaultTitle;
-  return (
-    <div contentEditable="true">
-      <h1>{text}</h1>
-    </div>
-  );
-}
-
-function CenterContent() {
+  const divTitleRef = useRef();
   const divEditorRef = useRef();
   const divHTMLRef = useRef();
   const textPosDisplayRef = useRef();
@@ -116,7 +114,7 @@ function CenterContent() {
   }
 
   function updateCursorDisplay(pos) {
-    textPosDisplayRef.current.innerText = `row: ${pos.row}, column: ${pos.column}`;
+    textPosDisplayRef.current.innerText = `Ln ${pos.row}, Col ${pos.column}`;
   }
 
   function updateEditorDOM(text, cursorPos) {
@@ -137,8 +135,9 @@ function CenterContent() {
   }
 
   return (
-    <>
-      <div className="center-content">
+    <div className="layout-center">
+      <input className="layout-center-title" ref={divTitleRef} type="text" />
+      <div className="layout-center-content">
         <pre
           className="content-box"
           ref={divEditorRef}
@@ -150,8 +149,8 @@ function CenterContent() {
         />
         <pre className="content-box" ref={divHTMLRef} />
       </div>
-      <span ref={textPosDisplayRef} />
-    </>
+      <span className="layout-center-nav" ref={textPosDisplayRef} />
+    </div>
   );
 }
 
@@ -166,6 +165,7 @@ class MarkData {
     applyEffectOnPattern = false,
     lineData = false,
     imgData = null,
+    styleClassHTML = null,
   }) {
     this.stylePrefix = "editor-";
     this.styleClass = styleClass === null ? this.stylePrefix + tag : styleClass;
@@ -176,6 +176,7 @@ class MarkData {
     this.applyEffectOnPattern = applyEffectOnPattern;
     this.lineData = lineData;
     this.imgData = imgData;
+    this.styleClassHTML = styleClassHTML;
   }
   get leftPatternLength() {
     return this.pattern.length + this.leftPatternBonus;
@@ -358,11 +359,15 @@ const markDataDBTr = new MarkData({
 const markDataDBTd = new MarkData({
   tag: "td",
 });
+const markDataDBTh = new MarkData({
+  tag: "th",
+});
 const markPatternDBComment = new MarkData({
   styleClass: "editor-comment",
   pattern: "\\",
   tag: "span",
 });
+const htmlCodeBlockClass = "code-block";
 
 function createRangeMarkList(textContent) {
   const [resultEditorList, resultHTMLList] = [[], []];
@@ -380,29 +385,45 @@ function createRangeMarkList(textContent) {
   }
 
   function scanLargeCodeBlock() {
-    let prevOffset = -1;
     let prevRow = -1;
     for (let row = 0; row < lines.length; row++) {
       const line = lines[row];
       const pattern = markDataDBCodeBlockPattern;
       const offset = lineOffsetDB[row];
       if (line === pattern) {
-        if (prevOffset === -1) {
-          prevOffset = offset;
+        if (prevRow === -1) {
           prevRow = row;
         } else {
+          const prevOffset = lineOffsetDB[prevRow];
           resultHTMLList.push(
             new MarkRange(prevOffset, offset + line.length, markDataDBCodeBlock)
+          );
+          resultHTMLList.push(
+            new MarkRange(
+              prevOffset,
+              offset + line.length,
+              new MarkData({ tag: "pre", styleClassHTML: htmlCodeBlockClass })
+            )
           );
           function addPattern(p) {
             addMarkData(p, p + 3, new MarkData({ pattern: pattern }));
           }
           addPattern(prevOffset);
           addPattern(offset);
-          paragraphSep.push(prevRow);
-          paragraphSep.push(row);
+          for (let r = prevRow; r <= row; r++) {
+            paragraphSep.push(r);
+          }
+          for (let r = prevRow + 1; r < row; r++) {
+            resultEditorList.push(
+              new MarkRange(
+                lineOffsetDB[r],
+                lineOffsetDB[r] + lines[r].length,
+                markDataDBCodeBlock
+              )
+            );
+          }
           applyLinePattern.fill(false, prevRow, row + 1);
-          prevOffset = -1;
+          prevRow = -1;
         }
       }
     }
@@ -558,8 +579,9 @@ function createRangeMarkList(textContent) {
         const items = lines[row].split(markDataDBTableBasis.pattern);
         let col = lineOffsetDB[row] + 1;
         for (let i = 1; i < items.length - 1; i++) {
+          const markData = row === tableLo ? markDataDBTh : markDataDBTd;
           resultHTMLList.push(
-            new MarkRange(col, col + items[i].length, markDataDBTd)
+            new MarkRange(col, col + items[i].length, markData)
           );
           col += items[i].length + 1;
         }
@@ -618,6 +640,15 @@ function createRangeMarkList(textContent) {
         const lo = stk[idx].pos;
         const hi = item.pos + item.markData.pattern.length;
         addMarkData(lo, hi, item.markData);
+        if (item.markData.tag === "code") {
+          resultHTMLList.push(
+            new MarkRange(
+              lo,
+              hi,
+              new MarkData({ tag: "span", styleClassHTML: htmlCodeBlockClass })
+            )
+          );
+        }
         while (idx < stk.length) {
           stk.pop();
         }
@@ -783,7 +814,8 @@ function createRangeMarkList(textContent) {
         ? x.lo - y.lo
         : x.hi !== y.hi
         ? y.hi - x.hi
-        : x.markData.lineData
+        : x.markData.lineData ||
+          x.markData.styleClassHTML === htmlCodeBlockClass
         ? -1
         : 1
     );
@@ -960,25 +992,26 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, text) {
   }
   function addDOMNodeByMarkTree(markNode, DOMnode, lo, hi) {
     for (const markChild of markNode.children) {
-      if (!markChild.markData.hasTag) {
-        lo = markChild.hi;
-        continue;
-      }
       if (lo < markChild.lo) {
         appendTextNode(DOMnode, lo, markChild.lo);
       }
-      const childDOMNode = document.createElement(markChild.markData.tag);
-      if (markChild.markData.imgData !== null) {
-        childDOMNode.setAttribute("src", markChild.markData.imgData.src);
-        childDOMNode.setAttribute("alt", markChild.markData.imgData.alt);
+      if (markChild.markData.hasTag) {
+        const childDOMNode = document.createElement(markChild.markData.tag);
+        if (markChild.markData.imgData !== null) {
+          childDOMNode.setAttribute("src", markChild.markData.imgData.src);
+          childDOMNode.setAttribute("alt", markChild.markData.imgData.alt);
+        }
+        if (markChild.markData.styleClassHTML !== null) {
+          childDOMNode.setAttribute("class", markChild.markData.styleClassHTML);
+        }
+        addDOMNodeByMarkTree(
+          markChild,
+          childDOMNode,
+          markChild.lo + markChild.markData.leftPatternLength,
+          markChild.hi - markChild.markData.rightPatternLength
+        );
+        DOMnode.appendChild(childDOMNode);
       }
-      addDOMNodeByMarkTree(
-        markChild,
-        childDOMNode,
-        markChild.lo + markChild.markData.leftPatternLength,
-        markChild.hi - markChild.markData.rightPatternLength
-      );
-      DOMnode.appendChild(childDOMNode);
       lo = markChild.hi;
     }
     if (lo < hi) {
