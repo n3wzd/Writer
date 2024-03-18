@@ -1,28 +1,54 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import "./App.css";
 
 class EditorFile {
-  constructor(name = "", text = "") {
+  constructor(id, name = "", text = "") {
+    this.id = id;
     this.name = name;
     this.text = text;
   }
 }
 
 class EditorDirectory {
-  constructor(name = "") {
+  constructor(id, name = "") {
+    this.id = id;
     this.name = name;
     this.files = [];
+    this.isFold = false;
   }
 }
 
 const defaultTitle = "New Document";
 const mainDirectory = new EditorDirectory();
 
+const test = new EditorDirectory(6, "Directory 1");
+test.files = [
+  new EditorFile(4, "Untitled 4", "test 4"),
+  new EditorFile(5, "Untitled 5", "test 5"),
+];
+mainDirectory.files = [
+  new EditorFile(1, "Untitled 1", "test 1"),
+  new EditorFile(2, "Untitled 2", "test 2"),
+  test,
+  new EditorFile(3, "Untitled 3", "test 3"),
+];
+
 export default function App() {
-  return <Center />;
+  const [editorFile, setEditorFile] = useState(new EditorFile());
+
+  const handleFileClick = (file) => {
+    setEditorFile(file);
+  };
+
+  return (
+    <div className="layout-main">
+      <Left onFileClick={handleFileClick} />
+      <Center editorFile={editorFile} />
+    </div>
+  );
 }
 
-function Center() {
+function Center({ editorFile }) {
   const divTitleRef = useRef();
   const divEditorRef = useRef();
   const divHTMLRef = useRef();
@@ -33,6 +59,13 @@ function Center() {
   const redoStateStk = [];
   const undoTime = 500;
   let undoTimeID = null;
+
+  useEffect(() => {
+    divTitleRef.current.value = editorFile.name;
+    divEditorRef.current.innerText = editorFile.text;
+    inputChange(editorFile.text);
+    updateCursorDisplay(new TextPosition());
+  });
 
   function handleInputChange(event) {
     if (allowCompositeEditorDOM(event)) {
@@ -152,6 +185,43 @@ function Center() {
       <span className="layout-center-nav" ref={textPosDisplayRef} />
     </div>
   );
+}
+
+function Left({ onFileClick }) {
+  const [state, setState] = useState();
+
+  function toggleFoldDirectory(directory) {
+    // Not Updated (should use file.id)
+    // directory.isFold = !directory.isFold;
+    setState();
+  }
+
+  function listMaker(directory) {
+    return (
+      <ul>
+        {directory.files.map((file, idx) =>
+          file instanceof EditorDirectory ? (
+            <>
+              <li
+                key={idx}
+                className="directory"
+                onClick={() => toggleFoldDirectory(file)}
+              >
+                {file.name}
+              </li>
+              {file.isFold ? null : listMaker(file)}
+            </>
+          ) : (
+            <li key={idx} className="file" onClick={() => onFileClick(file)}>
+              {file.name}
+            </li>
+          )
+        )}
+      </ul>
+    );
+  }
+
+  return <div className="layout-left">{listMaker(mainDirectory)}</div>;
 }
 
 ////////////////////// INTERNAL //////////////////////
