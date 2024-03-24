@@ -1,54 +1,166 @@
 import React, { useRef, useState, useEffect } from "react";
 import "./App.css";
 
-class EditorFile {
-  constructor(id, name = "", text = "") {
-    this.id = id;
-    this.name = name;
-    this.text = text;
+class FileManager {
+  constructor() {
+    this.fileIdGenerator = 0;
+    this.rootDir = this.createDirectory();
+    this.dummyFile = this.createFile();
+    this.fileMap = new Map();
+    this.fileCount = 1;
+    this.rootDir.files = [this.createFile("Untitled", "")];
+  }
+
+  generateFileID() {
+    return this.fileIdGenerator++;
+  }
+
+  getFileById(id) {
+    const file = this.fileMap.get(id);
+    return file === undefined ? null : file;
+  }
+
+  isFileExists(id) {
+    return this.getFileById(id) !== null;
+  }
+
+  createFile(name = "", text = "", parentDir = null) {
+    const file = {
+      id: this.generateFileID(),
+      name: name,
+      parentDir: parentDir === null ? this.rootDir : parentDir,
+      text: text,
+    };
+    this.registerFileToMap(file);
+    return file;
+  }
+
+  createDirectory(name = "", parentDir = null) {
+    const file = {
+      id: this.generateFileID(),
+      name: name,
+      parentDir: parentDir === null ? this.rootDir : parentDir,
+      files: [],
+      isFold: false,
+    };
+    this.registerFileToMap(file);
+    return file;
+  }
+
+  registerFileToMap(file) {
+    if (this.fileMap) {
+      this.fileMap.set(file.id, file);
+    }
+  }
+
+  isDirectory(id) {
+    return this.getFileById(id).files !== undefined;
+  }
+
+  toggleDirectoryFold(id) {
+    const dir = this.getFileById(id);
+    dir.isFold = !dir.isFold;
+  }
+
+  setDirectoryFold(id, value) {
+    const dir = this.getFileById(id);
+    dir.isFold = value;
+  }
+
+  renameFile(id, name) {
+    this.getFileById(id).name = name;
+  }
+
+  updateFileText(id, text) {
+    this.getFileById(id).text = text;
+  }
+
+  addFile(parentId, name) {
+    const file = this.createFile(name, "", this.getFileById(parentId));
+    file.parentDir.files.push(file);
+    this.fileCount++;
+    return file.id;
+  }
+
+  addDirectory(parentId, name) {
+    const file = this.createDirectory(name, this.getFileById(parentId));
+    file.parentDir.files.push(file);
+    return file.id;
+  }
+
+  deleteFile(id) {
+    const file = this.getFileById(id);
+    if (this.isDirectory(file.id)) {
+      for (const subFile of file.files) {
+        this.deleteFile(subFile.id);
+      }
+    } else {
+      this.fileCount--;
+    }
+    file.parentDir.files = file.parentDir.files.filter((item) => item !== file);
+    this.fileMap.delete(id);
+  }
+
+  getNearestDir(id) {
+    const file = this.getFileById(id);
+    return file === null
+      ? null
+      : this.isDirectory(file.id)
+      ? file.id
+      : file.parentDir.id;
+  }
+
+  resetDummyFile() {
+    this.dummyFile.name = "";
+    this.dummyFile.text = "";
   }
 }
 
-class EditorDirectory {
-  constructor(id, name = "") {
-    this.id = id;
-    this.name = name;
-    this.files = [];
-    this.isFold = false;
-  }
-}
-
-const defaultTitle = "New Document";
-const mainDirectory = new EditorDirectory();
-
-const test = new EditorDirectory(6, "Directory 1");
-test.files = [
-  new EditorFile(4, "Untitled 4", "test 4"),
-  new EditorFile(5, "Untitled 5", "test 5"),
-];
-mainDirectory.files = [
-  new EditorFile(1, "Untitled 1", "test 1"),
-  new EditorFile(2, "Untitled 2", "test 2"),
-  test,
-  new EditorFile(3, "Untitled 3", "test 3"),
-];
+const fileManager = new FileManager();
 
 export default function App() {
-  const [editorFile, setEditorFile] = useState(new EditorFile());
+  const [state, setState] = useState(true);
+  const [editorFile, setEditorFile] = useState(fileManager.rootDir.files[0]);
 
-  const handleFileClick = (file) => {
-    setEditorFile(file);
-  };
+  function handleFileUpdate(file) {
+    if (
+      fileManager.isFileExists(file.id) &&
+      !fileManager.isDirectory(file.id)
+    ) {
+      setEditorFile(file);
+    }
+  }
+
+  function handleFileRename() {
+    setState(!state);
+  }
+
+  function handleEditorNameUpdate(name) {
+    editorFile.name = name;
+    setState(!state);
+  }
+
+  function handleEditorTextUpdate(text) {
+    editorFile.text = text;
+  }
 
   return (
     <div className="layout-main">
-      <Left onFileClick={handleFileClick} />
-      <Center editorFile={editorFile} />
+      <Left
+        editorFile={editorFile}
+        onFileUpdate={handleFileUpdate}
+        onFileRename={handleFileRename}
+      />
+      <Center
+        editorFile={editorFile}
+        onEditorNameUpdate={handleEditorNameUpdate}
+        onEditorTextUpdate={handleEditorTextUpdate}
+      />
     </div>
   );
 }
 
-function Center({ editorFile }) {
+function Center({ editorFile, onEditorNameUpdate, onEditorTextUpdate }) {
   const divTitleRef = useRef();
   const divEditorRef = useRef();
   const divHTMLRef = useRef();
@@ -71,6 +183,10 @@ function Center({ editorFile }) {
     if (allowCompositeEditorDOM(event)) {
       inputChange(event.target.innerText);
     }
+  }
+
+  function handleTitleInputEnd(event) {
+    onEditorNameUpdate(divTitleRef.current.value);
   }
 
   function handleSelectChange(event) {
@@ -131,6 +247,7 @@ function Center({ editorFile }) {
     const cursorPos = getCursorPosition(divEditorRef.current, newText);
     updateEditorDOM(newText, cursorPos);
     updateCursorDisplay(cursorPos);
+    onEditorTextUpdate(divEditorRef.current.innerText);
 
     if (undoTimeID !== null) {
       clearTimeout(undoTimeID);
@@ -169,7 +286,12 @@ function Center({ editorFile }) {
 
   return (
     <div className="layout-center">
-      <input className="layout-center-title" ref={divTitleRef} type="text" />
+      <input
+        className="layout-center-title"
+        ref={divTitleRef}
+        onBlur={handleTitleInputEnd}
+        type="text"
+      />
       <div className="layout-center-content">
         <pre
           className="content-box"
@@ -187,44 +309,216 @@ function Center({ editorFile }) {
   );
 }
 
-function Left({ onFileClick }) {
-  const [state, setState] = useState();
+function Left({ editorFile, onFileUpdate, onFileRename }) {
+  const [state, setState] = useState(true);
+  const [menuVisible, setMenuVisible] = useState(true);
+  const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
+  const [popupVisible, setPopupVisible] = useState(false);
+  const [selectedFileId, setselectedFileId] = useState();
+  const [renameVisible, setRenameVisible] = useState(false);
+  const renameInputRef = useRef();
 
-  function toggleFoldDirectory(directory) {
-    // Not Updated (should use file.id)
-    // directory.isFold = !directory.isFold;
-    setState();
+  const fileIcon = (
+    <svg width="18" height="18" viewBox="4 -6 14 22">
+      <path
+        d="M11 0H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 1v4H3V1h4zm6 12H3V6h10v7z"
+        fill="#777777"
+      />
+    </svg>
+  );
+  const folderIcon = (
+    <svg width="18" height="18" viewBox="4 -6 14 22">
+      <path
+        fill="#777777"
+        d="M14.5 3H5.414l-1.707-1.707A.996.996 0 0 0 3.5 1H2.5C1.67157 1 1 1.67157 1 2.5v10c0 .8284.67157 1.5 1.5 1.5h11c.8284 0 1.5-.6716 1.5-1.5v-9c0-.2761-.2239-.5-.5-.5z"
+      />
+    </svg>
+  );
+
+  useEffect(() => {
+    if (renameInputRef.current) {
+      const file = fileManager.getFileById(selectedFileId);
+      renameInputRef.current.value = file === null ? "" : file.name;
+      renameInputRef.current.focus();
+    }
+  });
+
+  function toggleMenuVisible() {
+    setMenuVisible(!menuVisible);
   }
 
-  function listMaker(directory) {
+  function toggleDirectoryFold(id) {
+    fileManager.toggleDirectoryFold(id);
+    setState(!state);
+  }
+
+  function closeContextMenu() {
+    setPopupVisible(false);
+  }
+
+  function popupAddFile(isFile) {
+    const parentId = fileManager.getNearestDir(selectedFileId);
+    if (
+      fileManager.isFileExists(parentId) &&
+      fileManager.isDirectory(parentId)
+    ) {
+      fileManager.setDirectoryFold(parentId, false);
+    }
+    const newFileId = isFile
+      ? fileManager.addFile(parentId, "New File")
+      : fileManager.addDirectory(parentId, "New Folder");
+    showRenameInput(newFileId);
+    onFileUpdate(newFileId);
+    closeContextMenu();
+  }
+
+  function popupRenameFile() {
+    showRenameInput(selectedFileId);
+    closeContextMenu();
+  }
+
+  function popupDeleteFile() {
+    fileManager.deleteFile(selectedFileId);
+    closeContextMenu();
+  }
+
+  function showContextMenu(event, file = fileManager.rootDir) {
+    event.preventDefault();
+    event.stopPropagation();
+    setPopupPosition({ x: event.clientX, y: event.clientY });
+    setPopupVisible(true);
+    setselectedFileId(file.id);
+    window.addEventListener("click", closeContextMenu, { once: true });
+  }
+
+  function preventCloseContextMenu(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function showRenameInput(fileId) {
+    setRenameVisible(true);
+    setselectedFileId(fileId);
+  }
+
+  function submitRenameInput(event) {
+    const newName = event.target.value;
+    if (newName !== "") {
+      fileManager.renameFile(selectedFileId, event.target.value);
+      onFileRename();
+    }
+    setRenameVisible(false);
+  }
+
+  function handleListHotKeyDown(event, file) {
+    if (event.key === "Delete" || event.key === "Backspace") {
+      fileManager.deleteFile(file.id);
+      setState(!state);
+    } else if (event.key === "F2") {
+      showRenameInput(file.id);
+    }
+  }
+
+  function getLi(file, depth) {
+    const isDir = fileManager.isDirectory(file.id);
     return (
-      <ul>
-        {directory.files.map((file, idx) =>
-          file instanceof EditorDirectory ? (
-            <>
-              <li
-                key={idx}
-                className="directory"
-                onClick={() => toggleFoldDirectory(file)}
-              >
-                {file.name}
-              </li>
-              {file.isFold ? null : listMaker(file)}
-            </>
+      <>
+        <li
+          key={file.id}
+          className={editorFile.id === file.id ? "selected" : ""}
+          onClick={
+            isDir
+              ? () => toggleDirectoryFold(file.id)
+              : () => onFileUpdate(file)
+          }
+          onContextMenu={(event) => showContextMenu(event, file)}
+          style={{ paddingLeft: depth * 15 }}
+          tabIndex={0}
+          onKeyDown={(event) => handleListHotKeyDown(event, file)}
+        >
+          {isDir ? folderIcon : fileIcon}
+          {selectedFileId === file.id && renameVisible ? (
+            <input
+              type="text"
+              className="text-input"
+              ref={renameInputRef}
+              onBlur={submitRenameInput}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                  submitRenameInput(event);
+                }
+              }}
+              style={{ width: 200 - depth * 15 }}
+            ></input>
           ) : (
-            <li key={idx} className="file" onClick={() => onFileClick(file)}>
-              {file.name}
-            </li>
-          )
-        )}
-      </ul>
+            <span>{file.name}</span>
+          )}
+        </li>
+        {!isDir || file.isFold ? null : listMaker(file, depth + 1)}
+      </>
     );
   }
 
-  return <div className="layout-left">{listMaker(mainDirectory)}</div>;
+  function canSetFile() {
+    return fileManager.isFileExists(selectedFileId);
+  }
+
+  function listMaker(dir, depth = 1) {
+    return <ul>{dir.files.map((file) => getLi(file, depth))}</ul>;
+  }
+  return (
+    <>
+      <div
+        className="layout-left"
+        onContextMenu={(event) => showContextMenu(event)}
+      >
+        {menuVisible && (
+          <div className="layout-left-menu">
+            {listMaker(fileManager.rootDir)}
+          </div>
+        )}
+        <button className="layout-tab-button" onClick={toggleMenuVisible}>
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            style={{
+              transform: menuVisible ? "rotate(90deg)" : "rotate(270deg)",
+            }}
+          >
+            <path fill="#777777" d="M7 10l6 6 6-6z"></path>
+          </svg>
+        </button>
+      </div>
+      {popupVisible && (
+        <div
+          className="popup-menu"
+          style={{ left: popupPosition.x, top: popupPosition.y }}
+        >
+          <ul>
+            <li onClick={() => popupAddFile(true)}>New File</li>
+            <li onClick={() => popupAddFile(false)}>New Folder</li>
+            <hr />
+            <li
+              className={canSetFile() ? "" : "disabled"}
+              onClick={canSetFile() ? popupRenameFile : preventCloseContextMenu}
+            >
+              Rename
+            </li>
+            <li
+              className={canSetFile() ? "" : "disabled"}
+              onClick={canSetFile() ? popupDeleteFile : preventCloseContextMenu}
+            >
+              Delete
+            </li>
+          </ul>
+        </div>
+      )}
+    </>
+  );
 }
 
-////////////////////// INTERNAL //////////////////////
 class MarkData {
   constructor({
     styleClass = null,
@@ -625,7 +919,7 @@ function createRangeMarkList(textContent) {
       }
       return row - base;
     }
-    function applyResult(baseRow, td, bodyHeight) {
+    function applyResult(baseRow, bodyHeight) {
       const tableLo = baseRow - 1;
       const tableHi = baseRow + bodyHeight;
       function addLineToHTML(lo, hi, data) {
@@ -679,7 +973,7 @@ function createRangeMarkList(textContent) {
         const isHead = detectRowIntegrity(row - 1, td);
         const bodyHeight = getBodyHeight(row + 1, td);
         if (bodyHeight > 0 && isHead) {
-          applyResult(row, td, bodyHeight);
+          applyResult(row, bodyHeight);
           row += bodyHeight;
         }
       }
