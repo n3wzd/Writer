@@ -118,6 +118,55 @@ class FileManager {
 
 const fileManager = new FileManager();
 
+function menuTabButton(menuVisible, toggleMenuVisible, arrowAngle) {
+  return (
+    <button className="layout-tab-button" onClick={toggleMenuVisible}>
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        style={{
+          transform: menuVisible
+            ? `rotate(${arrowAngle}deg)`
+            : `rotate(${arrowAngle + 180}deg)`,
+        }}
+      >
+        <path fill="#777777" d="M7 10l6 6 6-6z"></path>
+      </svg>
+    </button>
+  );
+}
+
+const fileIcon = (
+  <svg width="18" height="18" viewBox="4 -6 14 22">
+    <path
+      d="M11 0H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 1v4H3V1h4zm6 12H3V6h10v7z"
+      fill="#777777"
+    />
+  </svg>
+);
+const folderIcon = (
+  <svg width="18" height="18" viewBox="4 -6 14 22">
+    <path
+      fill="#777777"
+      d="M14.5 3H5.414l-1.707-1.707A.996.996 0 0 0 3.5 1H2.5C1.67157 1 1 1.67157 1 2.5v10c0 .8284.67157 1.5 1.5 1.5h11c.8284 0 1.5-.6716 1.5-1.5v-9c0-.2761-.2239-.5-.5-.5z"
+    />
+  </svg>
+);
+const exportIcon = (
+  <svg viewBox="0 0 32 32" width="32" height="32">
+    <line
+      x1="5"
+      y1="22"
+      x2="19"
+      y2="22"
+      stroke="currentColor"
+      stroke-width="2"
+    />
+    <path d="M12 7l-6 6h3v6h6v-6h3l-6-6z" fill="currentColor" />
+  </svg>
+);
+
 export default function App() {
   const [state, setState] = useState(true);
   const [editorFile, setEditorFile] = useState(fileManager.rootDir.files[0]);
@@ -156,6 +205,7 @@ export default function App() {
         onEditorNameUpdate={handleEditorNameUpdate}
         onEditorTextUpdate={handleEditorTextUpdate}
       />
+      <Right editorFile={editorFile} />
     </div>
   );
 }
@@ -318,23 +368,6 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
   const [renameVisible, setRenameVisible] = useState(false);
   const renameInputRef = useRef();
 
-  const fileIcon = (
-    <svg width="18" height="18" viewBox="4 -6 14 22">
-      <path
-        d="M11 0H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 1v4H3V1h4zm6 12H3V6h10v7z"
-        fill="#777777"
-      />
-    </svg>
-  );
-  const folderIcon = (
-    <svg width="18" height="18" viewBox="4 -6 14 22">
-      <path
-        fill="#777777"
-        d="M14.5 3H5.414l-1.707-1.707A.996.996 0 0 0 3.5 1H2.5C1.67157 1 1 1.67157 1 2.5v10c0 .8284.67157 1.5 1.5 1.5h11c.8284 0 1.5-.6716 1.5-1.5v-9c0-.2761-.2239-.5-.5-.5z"
-      />
-    </svg>
-  );
-
   useEffect(() => {
     if (renameInputRef.current) {
       const file = fileManager.getFileById(selectedFileId);
@@ -470,27 +503,14 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
   return (
     <>
       <div
-        className="layout-left"
+        className={
+          "layout-left " + (menuVisible ? "menuAppear" : "menuDisappear")
+        }
         onContextMenu={(event) => showContextMenu(event)}
       >
-        {menuVisible && (
-          <div className="layout-left-menu">
-            {listMaker(fileManager.rootDir)}
-          </div>
-        )}
-        <button className="layout-tab-button" onClick={toggleMenuVisible}>
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            style={{
-              transform: menuVisible ? "rotate(90deg)" : "rotate(270deg)",
-            }}
-          >
-            <path fill="#777777" d="M7 10l6 6 6-6z"></path>
-          </svg>
-        </button>
+        {listMaker(fileManager.rootDir)}
       </div>
+      {menuTabButton(menuVisible, toggleMenuVisible, 90)}
       {popupVisible && (
         <div
           className="popup-menu"
@@ -515,6 +535,70 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
           </ul>
         </div>
       )}
+    </>
+  );
+}
+
+function Right({ editorFile }) {
+  const [menuVisible, setMenuVisible] = useState(true);
+
+  function toggleMenuVisible() {
+    setMenuVisible(!menuVisible);
+  }
+
+  function exportMarkdownFile() {
+    const blob = new Blob([compatibleLineBreak(editorFile.text)], {
+      type: "text/plain",
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${editorFile.name}.md`;
+    document.body.appendChild(link);
+    link.click();
+
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+  }
+
+  function exportHTMLFile() {}
+
+  function getLi(onClick, icon, title, subtitle) {
+    return (
+      <li onClick={onClick}>
+        {icon}
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle}</p>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <>
+      {menuTabButton(menuVisible, toggleMenuVisible, 270)}
+      <div
+        className={
+          "layout-right " + (menuVisible ? "menuAppear" : "menuDisappear")
+        }
+      >
+        <ul>
+          {getLi(
+            exportMarkdownFile,
+            exportIcon,
+            "Export as Markdown",
+            "Save the md file."
+          )}
+          {getLi(
+            exportHTMLFile,
+            exportIcon,
+            "Export as HTML",
+            "Generate an HTML page."
+          )}
+        </ul>
+      </div>
     </>
   );
 }
