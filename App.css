@@ -1,6 +1,7 @@
 body {
   padding: 0;
   margin: 0;
+  overflow: hidden;
 }
 
 .layout-main {
@@ -13,14 +14,19 @@ body {
 
 .layout-left {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   background-color: #e9e9e9;
-  padding: 0;
-  margin: 0;
   width: 200px;
   font-size: 0.9em;
   z-index: 0;
   user-select: none;
+}
+
+.layout-left .button-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  background-color: #ccc;
 }
 
 .layout-left ul {
@@ -48,6 +54,18 @@ body {
 .layout-left li.selected {
   background-color: #93c831;
   color: #fff;
+}
+
+.layout-left button {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+}
+
+.layout-left button:hover {
+  background-color: #ddd;
 }
 
 .layout-right {

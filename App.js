@@ -5,7 +5,6 @@ class FileManager {
   constructor() {
     this.fileIdGenerator = 0;
     this.rootDir = this.createDirectory();
-    this.dummyFile = this.createFile();
     this.fileMap = new Map();
     this.fileCount = 1;
     this.rootDir.files = [this.createFile("Untitled", "")];
@@ -30,6 +29,7 @@ class FileManager {
       name: name,
       parentDir: parentDir === null ? this.rootDir : parentDir,
       text: text,
+      htmlRef: null,
     };
     this.registerFileToMap(file);
     return file;
@@ -109,14 +109,10 @@ class FileManager {
       ? file.id
       : file.parentDir.id;
   }
-
-  resetDummyFile() {
-    this.dummyFile.name = "";
-    this.dummyFile.text = "";
-  }
 }
 
 const fileManager = new FileManager();
+const editorRowStates = [];
 
 function menuTabButton(menuVisible, toggleMenuVisible, arrowAngle) {
   return (
@@ -138,19 +134,13 @@ function menuTabButton(menuVisible, toggleMenuVisible, arrowAngle) {
 }
 
 const fileIcon = (
-  <svg width="18" height="18" viewBox="4 -6 14 22">
-    <path
-      d="M11 0H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 1v4H3V1h4zm6 12H3V6h10v7z"
-      fill="#777777"
-    />
+  <svg height="18" width="18" viewBox="4 -4 24 28" fill="#777777">
+    <path d="m17 14a1 1 0 0 1 -1 1h-8a1 1 0 0 1 0-2h8a1 1 0 0 1 1 1zm-4 3h-5a1 1 0 0 0 0 2h5a1 1 0 0 0 0-2zm9-6.515v8.515a5.006 5.006 0 0 1 -5 5h-10a5.006 5.006 0 0 1 -5-5v-14a5.006 5.006 0 0 1 5-5h4.515a6.958 6.958 0 0 1 4.95 2.05l3.484 3.486a6.951 6.951 0 0 1 2.051 4.949zm-6.949-7.021a5.01 5.01 0 0 0 -1.051-.78v4.316a1 1 0 0 0 1 1h4.316a4.983 4.983 0 0 0 -.781-1.05zm4.949 7.021c0-.165-.032-.323-.047-.485h-4.953a3 3 0 0 1 -3-3v-4.953c-.162-.015-.321-.047-.485-.047h-4.515a3 3 0 0 0 -3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3z" />
   </svg>
 );
 const folderIcon = (
-  <svg width="18" height="18" viewBox="4 -6 14 22">
-    <path
-      fill="#777777"
-      d="M14.5 3H5.414l-1.707-1.707A.996.996 0 0 0 3.5 1H2.5C1.67157 1 1 1.67157 1 2.5v10c0 .8284.67157 1.5 1.5 1.5h11c.8284 0 1.5-.6716 1.5-1.5v-9c0-.2761-.2239-.5-.5-.5z"
-    />
+  <svg id="Outline" width="16" height="16" viewBox="4 -4 20 28" fill="#777777">
+    <path d="M19,3H12.472a1.019,1.019,0,0,1-.447-.1L8.869,1.316A3.014,3.014,0,0,0,7.528,1H5A5.006,5.006,0,0,0,0,6V18a5.006,5.006,0,0,0,5,5H19a5.006,5.006,0,0,0,5-5V8A5.006,5.006,0,0,0,19,3ZM5,3H7.528a1.019,1.019,0,0,1,.447.1l3.156,1.579A3.014,3.014,0,0,0,12.472,5H19a3,3,0,0,1,2.779,1.882L2,6.994V6A3,3,0,0,1,5,3ZM19,21H5a3,3,0,0,1-3-3V8.994l20-.113V18A3,3,0,0,1,19,21Z" />
   </svg>
 );
 const exportIcon = (
@@ -161,9 +151,44 @@ const exportIcon = (
       x2="19"
       y2="22"
       stroke="currentColor"
-      stroke-width="2"
+      strokeWidth="2"
     />
     <path d="M12 7l-6 6h3v6h6v-6h3l-6-6z" fill="currentColor" />
+  </svg>
+);
+const importIcon = (
+  <svg viewBox="0 0 32 32" width="32" height="32">
+    <line
+      x1="5"
+      y1="22"
+      x2="19"
+      y2="22"
+      stroke="currentColor"
+      strokeWidth="2"
+    />
+    <path d="M12 19l-6 -6h3v-6h6v6h3l-6 6z" fill="currentColor" />
+  </svg>
+);
+const fileAddIcon = (
+  <svg height="24" width="24" viewBox="0 0 24 24" fill="#777777">
+    <path d="m16 16a1 1 0 0 1 -1 1h-2v2a1 1 0 0 1 -2 0v-2h-2a1 1 0 0 1 0-2h2v-2a1 1 0 0 1 2 0v2h2a1 1 0 0 1 1 1zm6-5.515v8.515a5.006 5.006 0 0 1 -5 5h-10a5.006 5.006 0 0 1 -5-5v-14a5.006 5.006 0 0 1 5-5h4.515a6.958 6.958 0 0 1 4.95 2.05l3.484 3.486a6.951 6.951 0 0 1 2.051 4.949zm-6.949-7.021a5.01 5.01 0 0 0 -1.051-.78v4.316a1 1 0 0 0 1 1h4.316a4.983 4.983 0 0 0 -.781-1.05zm4.949 7.021c0-.165-.032-.323-.047-.485h-4.953a3 3 0 0 1 -3-3v-4.953c-.162-.015-.321-.047-.485-.047h-4.515a3 3 0 0 0 -3 3v14a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3z" />
+  </svg>
+);
+const folderAddIcon = (
+  <svg height="24" width="24" viewBox="0 0 24 24" fill="#777777">
+    <path d="m16 15a1 1 0 0 1 -1 1h-2v2a1 1 0 0 1 -2 0v-2h-2a1 1 0 0 1 0-2h2v-2a1 1 0 0 1 2 0v2h2a1 1 0 0 1 1 1zm8-7v10a5.006 5.006 0 0 1 -5 5h-14a5.006 5.006 0 0 1 -5-5v-12a5.006 5.006 0 0 1 5-5h2.528a3.014 3.014 0 0 1 1.341.316l3.156 1.584a1.016 1.016 0 0 0 .447.1h6.528a5.006 5.006 0 0 1 5 5zm-22-2v1h19.816a3 3 0 0 0 -2.816-2h-6.528a3.014 3.014 0 0 1 -1.341-.316l-3.156-1.579a1.016 1.016 0 0 0 -.447-.105h-2.528a3 3 0 0 0 -3 3zm20 12v-9h-20v9a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3z" />
+  </svg>
+);
+const deleteIcon = (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="#777777">
+    <path d="M22,4H17V2a2,2,0,0,0-2-2H9A2,2,0,0,0,7,2V4H2V6H4V21a3,3,0,0,0,3,3H17a3,3,0,0,0,3-3V6h2ZM9,2h6V4H9Zm9,19a1,1,0,0,1-1,1H7a1,1,0,0,1-1-1V6H18Z" />
+    <rect x="9" y="10" width="2" height="8" />
+    <rect x="13" y="10" width="2" height="8" />
+  </svg>
+);
+const editIcon = (
+  <svg viewBox="0 0 24 24" width="24" height="24" fill="#777777">
+    <path d="M22.853,1.148a3.626,3.626,0,0,0-5.124,0L1.465,17.412A4.968,4.968,0,0,0,0,20.947V23a1,1,0,0,0,1,1H3.053a4.966,4.966,0,0,0,3.535-1.464L22.853,6.271A3.626,3.626,0,0,0,22.853,1.148ZM5.174,21.122A3.022,3.022,0,0,1,3.053,22H2V20.947a2.98,2.98,0,0,1,.879-2.121L15.222,6.483l2.3,2.3ZM21.438,4.857,18.932,7.364l-2.3-2.295,2.507-2.507a1.623,1.623,0,1,1,2.295,2.3Z" />
   </svg>
 );
 
@@ -189,8 +214,9 @@ export default function App() {
     setState(!state);
   }
 
-  function handleEditorTextUpdate(text) {
+  function handleEditorTextUpdate(text, htmlRef) {
     editorFile.text = text;
+    editorFile.htmlRef = htmlRef;
   }
 
   return (
@@ -205,7 +231,7 @@ export default function App() {
         onEditorNameUpdate={handleEditorNameUpdate}
         onEditorTextUpdate={handleEditorTextUpdate}
       />
-      <Right editorFile={editorFile} />
+      <Right editorFile={editorFile} onFileUpdate={handleFileUpdate} />
     </div>
   );
 }
@@ -231,11 +257,14 @@ function Center({ editorFile, onEditorNameUpdate, onEditorTextUpdate }) {
 
   function handleInputChange(event) {
     if (allowCompositeEditorDOM(event)) {
-      inputChange(event.target.innerText);
+      inputChange(
+        event.target.innerText,
+        event.nativeEvent.inputType === "insertParagraph"
+      );
     }
   }
 
-  function handleTitleInputEnd(event) {
+  function handleTitleInputEnd() {
     onEditorNameUpdate(divTitleRef.current.value);
   }
 
@@ -292,12 +321,41 @@ function Center({ editorFile, onEditorNameUpdate, onEditorTextUpdate }) {
     }
   }
 
-  function inputChange(text) {
-    const newText = compatibleLineBreak(text);
-    const cursorPos = getCursorPosition(divEditorRef.current, newText);
+  function inputChange(text, isNewLine = false) {
+    let newText = compatibleLineBreak(text);
+    let cursorPos = getCursorPosition(divEditorRef.current, newText);
+
+    if (isNewLine) {
+      const curRowState = editorRowStates[cursorPos.row - 1];
+      const nextText = curRowState.nextToken;
+      if (curRowState.isPlain) {
+        if (getLineLengthByRow(cursorPos.row, divEditorRef.current) === 0) {
+          const i = cursorPos.offset + cursorPos.row;
+          const segLen = curRowState.curToken.length;
+          newText =
+            newText.slice(0, i - (segLen + 1)) +
+            newText.slice(i, newText.length);
+          cursorPos.column -= segLen;
+          cursorPos.offset -= segLen;
+          cursorPos.row--;
+        }
+      } else if (nextText !== "") {
+        if (
+          getLineLengthByRow(cursorPos.row - 1, divEditorRef.current) >=
+          curRowState.curToken.length
+        ) {
+          const i = cursorPos.offset + cursorPos.row;
+          newText =
+            newText.slice(0, i) + nextText + newText.slice(i, newText.length);
+          cursorPos.column += nextText.length;
+          cursorPos.offset += nextText.length;
+        }
+      }
+    }
+
     updateEditorDOM(newText, cursorPos);
     updateCursorDisplay(cursorPos);
-    onEditorTextUpdate(divEditorRef.current.innerText);
+    onEditorTextUpdate(divEditorRef.current.innerText, divHTMLRef.current);
 
     if (undoTimeID !== null) {
       clearTimeout(undoTimeID);
@@ -382,11 +440,17 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
 
   function toggleDirectoryFold(id) {
     fileManager.toggleDirectoryFold(id);
+    setselectedFileId(id);
     setState(!state);
   }
 
   function closeContextMenu() {
     setPopupVisible(false);
+  }
+
+  function handleFileUpdate(newFileId) {
+    setselectedFileId(newFileId);
+    onFileUpdate(fileManager.getFileById(newFileId));
   }
 
   function popupAddFile(isFile) {
@@ -401,7 +465,7 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
       ? fileManager.addFile(parentId, "New File")
       : fileManager.addDirectory(parentId, "New Folder");
     showRenameInput(newFileId);
-    onFileUpdate(newFileId);
+    handleFileUpdate(newFileId);
     closeContextMenu();
   }
 
@@ -462,7 +526,7 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
           onClick={
             isDir
               ? () => toggleDirectoryFold(file.id)
-              : () => onFileUpdate(file)
+              : () => handleFileUpdate(file.id)
           }
           onContextMenu={(event) => showContextMenu(event, file)}
           style={{ paddingLeft: depth * 15 }}
@@ -508,6 +572,16 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
         }
         onContextMenu={(event) => showContextMenu(event)}
       >
+        <div class="button-container">
+          <button onClick={() => popupAddFile(true)}>{fileAddIcon}</button>
+          <button onClick={() => popupAddFile(false)}>{folderAddIcon}</button>
+          <button onClick={canSetFile() ? popupRenameFile : null}>
+            {deleteIcon}
+          </button>
+          <button onClick={canSetFile() ? popupDeleteFile : null}>
+            {editIcon}
+          </button>
+        </div>
         {listMaker(fileManager.rootDir)}
       </div>
       {menuTabButton(menuVisible, toggleMenuVisible, 90)}
@@ -539,30 +613,66 @@ function Left({ editorFile, onFileUpdate, onFileRename }) {
   );
 }
 
-function Right({ editorFile }) {
+function Right({ editorFile, onFileUpdate }) {
   const [menuVisible, setMenuVisible] = useState(true);
 
   function toggleMenuVisible() {
     setMenuVisible(!menuVisible);
   }
 
-  function exportMarkdownFile() {
-    const blob = new Blob([compatibleLineBreak(editorFile.text)], {
-      type: "text/plain",
+  function downloadFile(type, data, fileName) {
+    const blob = new Blob([data], {
+      type: type,
     });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement("a");
-
     link.href = url;
-    link.download = `${editorFile.name}.md`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
-
     window.URL.revokeObjectURL(url);
     document.body.removeChild(link);
   }
 
-  function exportHTMLFile() {}
+  function exportMarkdownFile() {
+    downloadFile(
+      "text/plain",
+      compatibleLineBreak(editorFile.text),
+      `${editorFile.name}.md`
+    );
+  }
+
+  function exportHTMLFile() {
+    const body = editorFile.htmlRef.outerHTML
+      .replace(
+        /(<\/(?:|p|blockquote|ul|ol|li|h1|h2|h3|h4|h5|h6|pre|table|thead|tbody|tr)>)/g,
+        "$1\n"
+      )
+      .replace(/(<(?:pre[^>]+|ul|ol|table|thead|tbody)>)/g, "$1\n");
+    const htmlData = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="utf-8">\n<title>${escapeHtml(
+      editorFile.name
+    )}</title>\n<link rel="stylesheet" href="App.css"/>\n</head>\n<body class="writer">\n${body}</body>\n</html>`;
+    downloadFile("text/html", htmlData, `${editorFile.name}.html`);
+  }
+
+  function importMarkdownFile() {
+    const fileInput = document.createElement("input");
+    fileInput.setAttribute("type", "file");
+    fileInput.setAttribute("accept", ".txt, .md");
+    fileInput.addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const newFileId = fileManager.addFile(null, file.name);
+        fileManager.updateFileText(newFileId, event.target.result);
+        onFileUpdate(fileManager.getFileById(newFileId));
+      };
+      reader.readAsText(file);
+      document.body.removeChild(fileInput);
+    });
+    document.body.appendChild(fileInput);
+    fileInput.click();
+  }
 
   function getLi(onClick, icon, title, subtitle) {
     return (
@@ -596,6 +706,12 @@ function Right({ editorFile }) {
             exportIcon,
             "Export as HTML",
             "Generate an HTML page."
+          )}
+          {getLi(
+            importMarkdownFile,
+            importIcon,
+            "Import Markdown",
+            "Import the md file."
           )}
         </ul>
       </div>
@@ -673,6 +789,14 @@ class EditorState {
   constructor(text = "", cursorPosition = new TextPosition()) {
     this.text = text;
     this.cursorPosition = cursorPosition;
+  }
+}
+
+class RowState {
+  constructor(curToken = "", nextToken = "", isPlain = false) {
+    this.curToken = curToken;
+    this.nextToken = nextToken;
+    this.isPlain = isPlain;
   }
 }
 
@@ -830,7 +954,9 @@ function createRangeMarkList(textContent) {
   }
   for (let row = 1; row < lines.length; row++) {
     lineOffsetDB[row] = lineOffsetDB[row - 1] + lines[row - 1].length + 1;
+    editorRowStates[row] = new RowState();
   }
+  editorRowStates[0] = new RowState();
 
   function scanLargeCodeBlock() {
     let prevRow = -1;
@@ -922,17 +1048,23 @@ function createRangeMarkList(textContent) {
         );
         for (let r = listLo; r <= listHi; r++) {
           if (!usedLine[r]) {
+            const curPattern = getItemPattern(type, r - listLo + 1);
             addMarkData(
               lineOffsetDB[r],
               lineOffsetDB[r] + lines[r].length,
               new MarkData({
-                pattern: getItemPattern(type, r - listLo + 1),
+                pattern: curPattern,
                 tag: listItem[type].tag,
                 leftPatternBonus: depth + 1,
               })
             );
             usedLine[r] = true;
             paragraphSep.push(r);
+            editorRowStates[r] = new RowState(
+              curPattern + " ",
+              getItemPattern(type, r - listLo + 2) + " ",
+              lines[r].length === curPattern.length + 1
+            );
           }
         }
       }
@@ -1154,6 +1286,13 @@ function createRangeMarkList(textContent) {
         if (data.pattern === lineSeg && (space === 32 || space === 160)) {
           addMarkData(lineOffsetDB[row], lineOffsetDB[row] + line.length, data);
           paragraphSep.push(row);
+          if (data.tag === "blockquote") {
+            editorRowStates[row] = new RowState(
+              data.pattern + " ",
+              data.pattern + " ",
+              patternLength + 1 === line.length
+            );
+          }
         }
       }
     }
@@ -1468,4 +1607,22 @@ function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, text) {
   }
   deleteDOMChildren(DOMRootNode);
   addDOMNodeByMarkTree(markRootNode, DOMRootNode, 0, text.length);
+}
+
+function getLineLengthByRow(row, rootDOMNode) {
+  const newLines = compatibleLineBreak(rootDOMNode.innerText).split("\n");
+  return newLines[row].length;
+}
+
+function escapeHtml(text) {
+  return text.replace(/[&<>"'`]/g, function (match) {
+    return {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+      "`": "&#x60;",
+    }[match];
+  });
 }
