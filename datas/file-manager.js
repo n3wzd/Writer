@@ -78,8 +78,8 @@ export class FileManager {
     this.getFileById(id).text = text;
   }
 
-  addFile(parentId, name) {
-    const file = this.createFile(name, "", this.getFileById(parentId));
+  addFile(parentId, name, content = "") {
+    const file = this.createFile(name, content, this.getFileById(parentId));
     file.parentDir.files.push(file);
     this.fileCount++;
     return file.id;
@@ -111,5 +111,21 @@ export class FileManager {
       : this.isDirectory(file.id)
       ? file.id
       : file.parentDir.id;
+  }
+
+  moveFile(targetId, goalId) {
+    if(targetId !== goalId) {
+      const targetFile = this.getFileById(targetId);
+      const goalFile = this.getFileById(goalId);
+      targetFile.parentDir.files = targetFile.parentDir.files.filter((item) => item !== targetFile);
+      if(this.isDirectory(goalId)) {
+        goalFile.files.push(targetFile);
+        targetFile.parentDir = goalFile;
+      } else {
+        const goalFiles = goalFile.parentDir.files;
+        goalFile.parentDir.files.splice(goalFiles.indexOf(goalFile) + 1, 0, targetFile);
+        targetFile.parentDir = goalFile.parentDir;
+      }
+    }
   }
 }

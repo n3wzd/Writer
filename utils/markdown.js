@@ -17,6 +17,8 @@ import {
   markDataDBTh,
   markPatternDBComment,
   htmlCodeBlockClass,
+  markDataDBimg,
+  markDataDBlink,
 } from "../datas/markdown.js";
 import { GlobalData } from "../datas/global-data.js";
 import { MarkData, MarkRange, MarkTreeNode, RowState } from "../datas/class.js";
@@ -144,7 +146,7 @@ export function createRangeMarkList(textContent) {
               new MarkData({
                 pattern: curPattern,
                 tag: listItem[type].tag,
-                leftPatternBonus: depth + 1,
+                leftPatternLength: depth + curPattern.length + 1,
               })
             );
             usedLine[r] = true;
@@ -308,8 +310,16 @@ export function createRangeMarkList(textContent) {
       if (matched) {
         const lo = stk[idx].pos;
         const hi = item.pos + item.markData.pattern.length;
-        addMarkData(lo, hi, item.markData);
         if (item.markData.tag === "code") {
+          function eraseInterTag(resStk) {
+            let i = resStk.length - 1;
+            while (resStk.length > 0 && lo < resStk[i].lo) {
+              resStk.pop();
+              i--;
+            }
+          }
+          eraseInterTag(resultEditorList);
+          eraseInterTag(resultHTMLList);
           resultHTMLList.push(
             new MarkRange(
               lo,
@@ -318,6 +328,7 @@ export function createRangeMarkList(textContent) {
             )
           );
         }
+        addMarkData(lo, hi, item.markData);
         while (idx < stk.length) {
           stk.pop();
         }
@@ -389,54 +400,49 @@ export function createRangeMarkList(textContent) {
   }
   function scanImagePatternInLine(row) {
     const line = lines[row];
-    if (line[0] !== "!" || line[1] !== "[") {
-      return;
-    }
-    let i = 2;
-    for (; i < line.length; i++) {
-      if (line[i] === "]") {
-        break;
-      }
-    }
-    if (line[i + 1] !== "(") {
-      return;
-    }
-    const centerPos = i;
-    for (i += 2; i < line.length; i++) {
-      if (line[i] === ")") {
-        break;
-      }
-    }
-    if (i !== line.length - 1) {
-      return;
-    }
-    const start = lineOffsetDB[row];
-    resultHTMLList.push(
-      new MarkRange(
-        start,
-        start + line.length,
+    const regex = /\!\[([^\]]+)\]\(([^)]+)\)/g;
+    let match = null;
+    while((match = regex.exec(line)) !== null) {
+      const lo = lineOffsetDB[row];
+      addMarkData(
+        lo + match.index, lo + match.index + match[0].length,
         new MarkData({
-          tag: "img",
-          imgData: {
-            src: line.substring(centerPos + 2, line.length - 1),
-            alt: line.substring(2, centerPos),
-          },
+          leftPatternLength: 2,
+          rightPatternLength: 3 + match[2].length,
+          tag: markDataDBimg.tag,
+          htmlAttribute: [
+            {name: 'alt', value: match[1]},
+            {name: 'src', value: match[2]},
+          ]
         })
-      )
-    );
-    addMarkData(
-      start,
-      start + line.length,
-      new MarkData({
-        pattern: line,
-      })
-    );
-    paragraphSep.push(row);
+      );
+    }
+  }
+  function scanLinkPatternInLine(row) {
+    const line = lines[row];
+    const regex = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g;
+    let match = null;
+    while((match = regex.exec(line)) !== null) {
+      const lo = lineOffsetDB[row];
+      addMarkData(
+        lo + match.index, lo + match.index + match[0].length,
+        new MarkData({
+          leftPatternLength: 1,
+          rightPatternLength: 3 + match[2].length,
+          tag: markDataDBlink.tag,
+          htmlAttribute: [
+            {name: 'title', value: match[1]}, 
+            {name: 'href', value: match[2]},
+          ]
+        })
+      );
+    }
   }
   function scanSingleLine(row) {
     scanOnlyLinePatternInLine(row);
     scanSinglePatternInLine(row);
     scanImagePatternInLine(row);
+    scanLinkPatternInLine(row);
     scanDoublePatternInLine(row);
     if (lines[row].length === 0) {
       paragraphSep.push(row);
@@ -471,13 +477,13 @@ export function createRangeMarkList(textContent) {
           new MarkRange(
             lineOffsetDB[rowLo],
             lineOffsetDB[rowHi] + lines[rowHi].length,
-            new MarkData({ tag: "p" })
+            new MarkData({ tag: "p", lineData: true })
           )
         );
         for (let r = rowLo; r < rowHi; r++) {
-          const pos = lineOffsetDB[r] + lines[r].length + 1;
+          const pos = lineOffsetDB[r] + lines[r].length;
           resultHTMLList.push(
-            new MarkRange(pos, pos, new MarkData({ tag: "br" }))
+            new MarkRange(pos, pos + 1, new MarkData({ tag: "br" }))
           );
         }
       }

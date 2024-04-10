@@ -1,47 +1,49 @@
 import { MarkData } from "./class.js";
 
+export const mathJaxClassName = 'mathJax';
+
 export const markDataDBSingle = [
   new MarkData({
     pattern: "#",
     tag: "h1",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 2,
   }),
   new MarkData({
     pattern: "##",
     tag: "h2",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 3,
   }),
   new MarkData({
     pattern: "###",
     tag: "h3",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 4,
   }),
   new MarkData({
     pattern: "####",
     tag: "h4",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 5,
   }),
   new MarkData({
     pattern: "#####",
     tag: "h5",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 6,
   }),
   new MarkData({
     pattern: "######",
     tag: "h6",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 7,
   }),
   new MarkData({
     pattern: ">",
     tag: "blockquote",
     applyEffectOnPattern: true,
-    leftPatternBonus: 1,
+    leftPatternLength: 8,
   }),
 ];
 
@@ -157,3 +159,11 @@ export const markPatternDBComment = new MarkData({
 });
 
 export const htmlCodeBlockClass = "code-block";
+
+export const markDataDBimg = new MarkData({
+  tag: "img",
+});
+
+export const markDataDBlink = new MarkData({
+  tag: "a",
+});

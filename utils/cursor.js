@@ -28,7 +28,7 @@ export function getCursorPosition(rootDOMNode, text) {
   const row = getRow();
   const tempRange = range.cloneRange();
   tempRange.selectNodeContents(rootDOMNode);
-  tempRange.setEnd(range.endContainer, range.endOffset);
+  tempRange.setEnd(range.startContainer, range.startOffset);
 
   const offset = tempRange.toString().length;
   let column = offset;

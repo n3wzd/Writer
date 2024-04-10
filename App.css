@@ -17,9 +17,12 @@ body {
   flex-direction: column;
   background-color: #e9e9e9;
   width: 200px;
+  height: 100vh;
   font-size: 0.9em;
   z-index: 0;
   user-select: none;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .layout-left .button-container {

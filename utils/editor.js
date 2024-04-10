@@ -93,9 +93,10 @@ export function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, text) {
       }
       if (markChild.markData.hasTag) {
         const childDOMNode = document.createElement(markChild.markData.tag);
-        if (markChild.markData.imgData !== null) {
-          childDOMNode.setAttribute("src", markChild.markData.imgData.src);
-          childDOMNode.setAttribute("alt", markChild.markData.imgData.alt);
+        if (markChild.markData.htmlAttribute !== null) {
+          for(attr of markChild.markData.htmlAttribute) {
+            childDOMNode.setAttribute(attr.name, attr.value);
+          }
         }
         if (markChild.markData.styleClassHTML !== null) {
           childDOMNode.setAttribute("class", markChild.markData.styleClassHTML);

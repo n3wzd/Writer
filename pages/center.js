@@ -12,6 +12,7 @@ import {
 } from "../utils/html.js";
 import { createRangeMarkList, createMarkTree } from "../utils/markdown.js";
 import { EditorState, TextPosition } from "../datas/class.js";
+import { mathJaxClassName } from "../datas/markdown.js";
 
 const global = new GlobalData();
 

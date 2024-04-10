@@ -7,8 +7,10 @@ export class MarkData {
     leftPatternBonus = 0,
     applyEffectOnPattern = false,
     lineData = false,
-    imgData = null,
+    htmlAttribute = null,
     styleClassHTML = null,
+    leftPatternLength = null,
+    rightPatternLength = null,
   }) {
     this.stylePrefix = "editor-";
     this.styleClass = styleClass === null ? this.stylePrefix + tag : styleClass;
@@ -18,14 +20,10 @@ export class MarkData {
     this.leftPatternBonus = leftPatternBonus;
     this.applyEffectOnPattern = applyEffectOnPattern;
     this.lineData = lineData;
-    this.imgData = imgData;
+    this.htmlAttribute = htmlAttribute;
     this.styleClassHTML = styleClassHTML;
-  }
-  get leftPatternLength() {
-    return this.pattern.length + this.leftPatternBonus;
-  }
-  get rightPatternLength() {
-    return this.isDouble ? this.pattern.length : 0;
+    this.leftPatternLength = leftPatternLength === null ? pattern.length : leftPatternLength;
+    this.rightPatternLength = rightPatternLength === null ? (isDouble ? pattern.length : 0) : rightPatternLength;
   }
   get hasStyle() {
     return this.styleClass !== this.stylePrefix;

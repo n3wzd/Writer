@@ -19,6 +19,7 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
   const [popupVisible, setPopupVisible] = useState(false);
   const [selectedFileId, setselectedFileId] = useState();
   const [renameVisible, setRenameVisible] = useState(false);
+  const [draggedItem, setDraggedItem] = useState(null);
   const renameInputRef = useRef();
 
   useEffect(() => {
@@ -112,6 +113,21 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
     }
   }
 
+  const handleDragStart = (event, id) => {
+    setDraggedItem(id);
+    event.dataTransfer.setData('text/plain', '');
+  };
+
+  const handleDragOver = event => {
+    event.preventDefault();
+  };
+
+  const handleDrop = (event, id) => {
+    event.preventDefault();
+    fileManager.moveFile(draggedItem, id);
+    setDraggedItem(null);
+  };
+
   function getLi(file, depth) {
     const isDir = fileManager.isDirectory(file.id);
     return (
@@ -128,6 +144,10 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
           style={{ paddingLeft: depth * 15 }}
           tabIndex={0}
           onKeyDown={(event) => handleListHotKeyDown(event, file)}
+          draggable
+          onDragStart={event => handleDragStart(event, file.id)}
+          onDragOver={handleDragOver}
+          onDrop={event => handleDrop(event, file.id)}
         >
           {isDir ? folderIcon : fileIcon}
           {selectedFileId === file.id && renameVisible ? (
@@ -168,7 +188,7 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
         }
         onContextMenu={(event) => showContextMenu(event)}
       >
-        <div class="button-container">
+        <div className="button-container">
           <button onClick={() => popupAddFile(true)}>{fileAddIcon}</button>
           <button onClick={() => popupAddFile(false)}>{folderAddIcon}</button>
           <button onClick={canSetFile() ? popupDeleteFile : null}>
