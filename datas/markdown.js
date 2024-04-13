@@ -43,7 +43,7 @@ export const markDataDBSingle = [
     pattern: ">",
     tag: "blockquote",
     applyEffectOnPattern: true,
-    leftPatternLength: 8,
+    leftPatternLength: 2,
   }),
 ];
 

@@ -3,7 +3,6 @@ import { FileManager } from "./datas/file-manager.js";
 import { Center } from "./pages/center.js";
 import { Left } from "./pages/left.js";
 import { Right } from "./pages/right.js";
-import "./App.css";
 
 const fileManager = new FileManager();
 
