@@ -9,6 +9,8 @@ import {
 } from "../components/icons.js";
 import { MenuTabButton } from "../components/menu-tab-button.js";
 import { FileManager } from "../datas/file-manager.js";
+import "../styles/main.css";
+import "../styles/pages-left.css";
 
 const fileManager = new FileManager();
 
@@ -17,7 +19,7 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
   const [menuVisible, setMenuVisible] = useState(true);
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [popupVisible, setPopupVisible] = useState(false);
-  const [selectedFileId, setselectedFileId] = useState();
+  const [selectedFileId, setselectedFileId] = useState(fileManager.rootDir.id);
   const [renameVisible, setRenameVisible] = useState(false);
   const [draggedItem, setDraggedItem] = useState(null);
   const renameInputRef = useRef();
@@ -51,15 +53,13 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
 
   function popupAddFile(isFile) {
     const parentId = fileManager.getNearestDir(selectedFileId);
-    if (
-      fileManager.isFileExists(parentId) &&
-      fileManager.isDirectory(parentId)
-    ) {
+    if (fileManager.isFileExists(parentId)) {
       fileManager.setDirectoryFold(parentId, false);
     }
     const newFileId = isFile
       ? fileManager.addFile(parentId, "New File")
       : fileManager.addDirectory(parentId, "New Folder");
+    fileManager.moveFile(newFileId, selectedFileId);
     showRenameInput(newFileId);
     handleFileUpdate(newFileId);
     closeContextMenu();
@@ -72,6 +72,7 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
 
   function popupDeleteFile() {
     fileManager.deleteFile(selectedFileId);
+    setselectedFileId(fileManager.rooDir.id);
     setState(!state);
     closeContextMenu();
   }

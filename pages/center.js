@@ -8,11 +8,13 @@ import {
 import {
   compatibleLineBreak,
   getLineLengthByRow,
-  escapeHtml,
 } from "../utils/html.js";
 import { createRangeMarkList, createMarkTree } from "../utils/markdown.js";
 import { EditorState, TextPosition } from "../datas/class.js";
-import { mathJaxClassName } from "../datas/markdown.js";
+import "../styles/main.css";
+import "../styles/pages-center.css";
+import "../styles/editor.css";
+import "../styles/html.css";
 
 const global = new GlobalData();
 
@@ -156,9 +158,7 @@ export function Center({ editorFile, onEditorNameUpdate, onEditorTextUpdate }) {
   }
 
   function updateEditorDOM(text, cursorPos) {
-    const [resultEditorList, resultHTMLList] = createRangeMarkList(text);
-    const rootMarkEditorNode = createMarkTree(resultEditorList, text);
-    const rootMarkHTMLNode = createMarkTree(resultHTMLList, text);
+    const [rootMarkEditorNode, rootMarkHTMLNode] = createMarkTree(text);
     applyMarkTreeToEditorDOM(
       rootMarkEditorNode,
       divEditorRef.current,

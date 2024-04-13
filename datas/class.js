@@ -4,7 +4,6 @@ export class MarkData {
     pattern = "",
     tag = "",
     isDouble = false,
-    leftPatternBonus = 0,
     applyEffectOnPattern = false,
     lineData = false,
     htmlAttribute = null,
@@ -17,7 +16,6 @@ export class MarkData {
     this.pattern = pattern;
     this.tag = tag;
     this.isDouble = isDouble;
-    this.leftPatternBonus = leftPatternBonus;
     this.applyEffectOnPattern = applyEffectOnPattern;
     this.lineData = lineData;
     this.htmlAttribute = htmlAttribute;

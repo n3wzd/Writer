@@ -25,7 +25,7 @@ import { MarkData, MarkRange, MarkTreeNode, RowState } from "../datas/class.js";
 
 const global = new GlobalData();
 
-export function createRangeMarkList(textContent) {
+export function createMarkTree(textContent) {
   const [resultEditorList, resultHTMLList] = [[], []];
   const lines = textContent.split("\n");
   const applyLinePattern = new Array(lines.length).fill(true);
@@ -68,9 +68,8 @@ export function createRangeMarkList(textContent) {
           }
           addPattern(prevOffset);
           addPattern(offset);
-          for (let r = prevRow; r <= row; r++) {
-            paragraphSep.push(r);
-          }
+          paragraphSep.push(prevRow);
+          paragraphSep.push(row);
           for (let r = prevRow + 1; r < row; r++) {
             resultEditorList.push(
               new MarkRange(
@@ -152,9 +151,9 @@ export function createRangeMarkList(textContent) {
             usedLine[r] = true;
             paragraphSep.push(r);
             global.editorRowStates[r] = new RowState(
-              curPattern + " ",
+              getTabByDepth() + curPattern + " ",
               getTabByDepth() + getItemPattern(type, r - listLo + 2) + " ",
-              lines[r].length === curPattern.length + 1
+              lines[r].length === (getTabByDepth() + curPattern).length + 1
             );
           }
         }
@@ -242,10 +241,10 @@ export function createRangeMarkList(textContent) {
       addLineToHTML(tableLo, tableLo, markDataDBThead);
       addLineToHTML(baseRow, tableHi, markDataDBTbody);
       for (let row = tableLo; row <= tableHi; row++) {
+        paragraphSep.push(row);
         if (row === baseRow) {
           continue;
         }
-        paragraphSep.push(row);
         addLineToHTML(row, row, markDataDBTr);
         const items = lines[row].split(markDataDBTableBasis.pattern);
         let col = lineOffsetDB[row] + 1;
@@ -493,7 +492,7 @@ export function createRangeMarkList(textContent) {
 
   sortList(resultEditorList);
   sortList(resultHTMLList);
-  return [resultEditorList, resultHTMLList];
+  return [linkMarkTree(resultEditorList, textContent), linkMarkTree(resultHTMLList, textContent)];
 }
 
 function sortList(list) {
@@ -508,7 +507,7 @@ function sortList(list) {
   );
 }
 
-export function createMarkTree(markList, text) {
+export function linkMarkTree(markList, text) {
   const rootNode = new MarkTreeNode(
     0,
     text.length,

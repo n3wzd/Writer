@@ -1,0 +1,50 @@
+.layout-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #fff;
+    z-index: 1;
+  }
+  
+  .layout-center-title {
+    flex: 2;
+    font-family: Arial, sans-serif;
+    font-size: 2em;
+    font-weight: bold;
+    padding: 8px 10px;
+    outline: none;
+    border: none;
+  }
+  
+  .layout-center-nav {
+    flex: 1;
+    background-color: #93c831;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    padding: 0px 16px;
+  }
+  
+  .layout-center-content {
+    flex: 40;
+    display: flex;
+    justify-content: space-between;
+    height: 80vh;
+  }
+  
+  .layout-center-content > .content-box {
+    flex: 1;
+    max-width: 50%;
+    box-sizing: border-box;
+    word-break: break-all;
+    outline: none;
+    overflow-y: auto;
+    padding: 8px 12px;
+    margin: 0px;
+    font-family: Arial, sans-serif;
+    font-size: 18px;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    color: #333;
+  }

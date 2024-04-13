@@ -1,0 +1,82 @@
+.content-box h1,
+.content-box h2,
+.content-box h3,
+.content-box h4,
+.content-box h5,
+.content-box h6 {
+  font-family: Arial, sans-serif;
+  font-weight: bold;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #ccc;
+}
+
+.content-box em {
+  font-style: italic;
+}
+
+.content-box strong {
+  font-weight: bold;
+}
+
+.content-box del {
+  text-decoration: line-through;
+  color: #777;
+}
+
+.content-box code {
+  font-family: Consolas, Monaco, "Andale Mono", monospace;
+  font-size: 0.9em;
+  border-radius: 4px;
+  color: #333;
+}
+
+.content-box .code-block {
+  background-color: #e6e6e6;
+  padding: 3px;
+}
+
+.content-box pre.code-block {
+  padding: 2px 12px;
+}
+
+.content-box blockquote {
+  margin: 0;
+  padding: 3px 24px;
+  background-color: #f9f9f9;
+  border-left: 5px solid #ccc;
+  color: #999;
+}
+
+.content-box sup {
+  font-size: 0.8em;
+  vertical-align: super;
+}
+
+.content-box sub {
+  font-size: 0.8em;
+  vertical-align: sub;
+}
+
+.content-box table {
+  border-collapse: collapse;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.content-box thead {
+  background-color: #eaeaea;
+  font-weight: bold;
+  padding: 10px;
+  text-align: center;
+}
+
+.content-box td,
+th {
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+.content-box tr:nth-child(even) {
+  background-color: #eaeaea;
+}

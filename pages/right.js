@@ -3,6 +3,8 @@ import { MenuTabButton } from "../components/menu-tab-button.js";
 import { exportIcon, importIcon } from "../components/icons.js";
 import { compatibleLineBreak, escapeHtml } from "../utils/html.js";
 import { FileManager } from "../datas/file-manager.js";
+import "../styles/main.css";
+import "../styles/pages-right.css";
 
 const fileManager = new FileManager();
 

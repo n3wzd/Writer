@@ -4,9 +4,9 @@ export class FileManager {
   constructor() {
     if (!instance) {
       this.fileIdGenerator = 0;
-      this.rootDir = this.createDirectory();
       this.fileMap = new Map();
       this.fileCount = 1;
+      this.rootDir = this.createDirectory();
       this.rootDir.files = [this.createFile("Untitled", "")];
       instance = this;
     }
