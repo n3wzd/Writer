@@ -35,7 +35,7 @@ src/
 │   ├── main.css: 전역 스타일시트
 │   ├── pages-center.css: Center 컴포넌트 스타일시트
 │   ├── pages-left.css: Left 컴포넌트 스타일시트
-│   ├── pages-right.css: Right 컴포넌트 스타일시트
+│   └── pages-right.css: Right 컴포넌트 스타일시트
 │
 ├── utils/: 유틸리티 함수
 │   ├── cursor.js: 커서 위치 탐색, 설정 함수
