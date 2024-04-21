@@ -1,5 +1,7 @@
 # Writer
-사용자가 Markdown 형식의 텍스트를 작성하고 실시간으로 미리보기할 수 있는 React기반 웹 애플리케이션입니다.
+사용자가 Markdown 형식의 텍스트를 작성하고 실시간으로 미리보기할 수 있는 웹 애플리케이션입니다.
+
+![example](example.png)
 
 - Markdown 텍스트 작성 가능
 - 실시간 편집기, HTML 뷰어 업데이트
@@ -8,7 +10,8 @@
 - 텍스트 파일 MD 또는 HTML 파일로 저장하기
 - MD, TEXT 파일 불러오기
 
-![example](example.png)
+## 기술 스택
+- React
 
 ## 파일 구조
 ```
