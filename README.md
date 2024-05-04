@@ -1,5 +1,5 @@
 # Writer
-사용자가 Markdown 형식의 텍스트를 작성하고 실시간으로 미리보기할 수 있는 웹 애플리케이션입니다.
+> 사용자가 Markdown 형식의 텍스트를 작성하고 실시간으로 미리보기할 수 있는 웹 애플리케이션입니다.
 
 ![example](example.png)
 
@@ -10,10 +10,10 @@
 - 텍스트 파일 MD 또는 HTML 파일로 저장하기
 - MD, TEXT 파일 불러오기
 
-## 기술 스택
+## Stack
 - React
 
-## 파일 구조
+## Structure
 ```
 src/
 │
