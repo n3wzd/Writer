@@ -1,3 +1,55 @@
+Writer
+> Web application where users can write Markdown text and preview it in real-time.
+
+![example](example.png)
+
+- Write Markdown text
+- Real-time editor with HTML viewer updates
+- Ability to save multiple text files
+- Create text files, create folders, rename files, and delete files
+- Save text files as MD or HTML
+- Import MD or TEXT files
+
+## Stack
+- React
+
+##
+```
+src/
+│
+├── components/: Reusable components
+│   ├── icons.js: SVG icon components
+│   └── menu-tab-button.js: Menu tab button
+│
+├── datas/: Classes, singletons, constants
+│   ├── class.js: Various classes
+│   ├── file-manager.js: FileManager singleton for managing files
+│   ├── global-data.js: GlobalData singleton for global variables
+│   └── markdown.js: Markdown-related constants
+│
+├── pages/: Layout UI components
+│   ├── center.js: Center layout UI
+│   ├── left.js: Left layout UI
+│   └── right.js: Right layout UI
+│
+├── styles/: Stylesheets
+│   ├── editor.css: Stylesheet for the Markdown editor
+│   ├── html.css: Stylesheet for the HTML viewer
+│   ├── main.css: Global stylesheet
+│   ├── pages-center.css: Stylesheet for the Center component
+│   ├── pages-left.css: Stylesheet for the Left component
+│   └── pages-right.css: Stylesheet for the Right component
+│
+├── utils/: Utility functions
+│   ├── cursor.js: Functions for cursor position detection and setting
+│   ├── editor.js: DOM rendering engine algorithm
+│   ├── html.js: HTML text parsing functions
+│   └── markdown.js: Markdown tree generation algorithm
+│
+├── App.js: Main layout
+└── index.js
+```
+
 # Writer
 > 사용자가 Markdown 형식의 텍스트를 작성하고 실시간으로 미리보기할 수 있는 웹 애플리케이션입니다.
 
