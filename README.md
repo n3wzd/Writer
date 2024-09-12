@@ -1,4 +1,4 @@
-Writer
+# Writer
 > Web application where users can write Markdown text and preview it in real-time.
 
 ![example](example.png)
