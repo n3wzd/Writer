@@ -72,7 +72,7 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
 
   function popupDeleteFile() {
     fileManager.deleteFile(selectedFileId);
-    setselectedFileId(fileManager.rooDir.id);
+    setselectedFileId(fileManager.rootDir.id);
     setState(!state);
     closeContextMenu();
   }
@@ -132,45 +132,43 @@ export function Left({ editorFile, onFileUpdate, onFileRename }) {
   function getLi(file, depth) {
     const isDir = fileManager.isDirectory(file.id);
     return (
-      <>
-        <li
-          key={file.id}
-          className={editorFile.id === file.id ? "selected" : ""}
-          onClick={
-            isDir
-              ? () => toggleDirectoryFold(file.id)
-              : () => handleFileUpdate(file.id)
-          }
-          onContextMenu={(event) => showContextMenu(event, file)}
-          style={{ paddingLeft: depth * 15 }}
-          tabIndex={0}
-          onKeyDown={(event) => handleListHotKeyDown(event, file)}
-          draggable
-          onDragStart={event => handleDragStart(event, file.id)}
-          onDragOver={handleDragOver}
-          onDrop={event => handleDrop(event, file.id)}
-        >
-          {isDir ? folderIcon : fileIcon}
-          {selectedFileId === file.id && renameVisible ? (
-            <input
-              type="text"
-              className="text-input"
-              ref={renameInputRef}
-              onBlur={submitRenameInput}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  submitRenameInput(event);
-                }
-              }}
-              style={{ width: 200 - depth * 15 }}
-            ></input>
-          ) : (
-            <span>{file.name}</span>
-          )}
-        </li>
+      <li
+        key={file.id}
+        className={editorFile.id === file.id ? "selected" : ""}
+        onClick={
+          isDir
+            ? () => toggleDirectoryFold(file.id)
+            : () => handleFileUpdate(file.id)
+        }
+        onContextMenu={(event) => showContextMenu(event, file)}
+        style={{ paddingLeft: depth * 15 }}
+        tabIndex={0}
+        onKeyDown={(event) => handleListHotKeyDown(event, file)}
+        draggable
+        onDragStart={event => handleDragStart(event, file.id)}
+        onDragOver={handleDragOver}
+        onDrop={event => handleDrop(event, file.id)}
+      >
+        {isDir ? folderIcon : fileIcon}
+        {selectedFileId === file.id && renameVisible ? (
+          <input
+            type="text"
+            className="text-input"
+            ref={renameInputRef}
+            onBlur={submitRenameInput}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Enter") {
+                submitRenameInput(event);
+              }
+            }}
+            style={{ width: 200 - depth * 15 }}
+          ></input>
+        ) : (
+          <span>{file.name}</span>
+        )}
         {!isDir || file.isFold ? null : listMaker(file, depth + 1)}
-      </>
+      </li>
     );
   }
 

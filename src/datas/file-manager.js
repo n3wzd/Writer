@@ -92,6 +92,10 @@ export class FileManager {
   }
 
   deleteFile(id) {
+    if(id === 0) {
+      return;
+    }
+
     const file = this.getFileById(id);
     if (this.isDirectory(file.id)) {
       for (const subFile of file.files) {
