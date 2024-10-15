@@ -130,6 +130,7 @@ export function createMarkTree(textContent) {
       }
       function applyResult() {
         const listHi = --row;
+        let curOrder = 0;
         resultHTMLList.push(
           new MarkRange(
             lineOffsetDB[listLo],
@@ -139,7 +140,8 @@ export function createMarkTree(textContent) {
         );
         for (let r = listLo; r <= listHi; r++) {
           if (!usedLine[r]) {
-            const curPattern = getItemPattern(type, r - listLo + 1);
+            curOrder++;
+            const curPattern = getItemPattern(type, curOrder);
             addMarkData(
               lineOffsetDB[r],
               lineOffsetDB[r] + lines[r].length,
@@ -153,7 +155,7 @@ export function createMarkTree(textContent) {
             paragraphSep.push(r);
             global.editorRowStates[r] = new RowState(
               getTabByDepth() + curPattern + " ",
-              getTabByDepth() + getItemPattern(type, r - listLo + 2) + " ",
+              getTabByDepth() + getItemPattern(type, curOrder + 1) + " ",
               lines[r].length === (getTabByDepth() + curPattern).length + 1
             );
           }
