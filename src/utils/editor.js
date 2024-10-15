@@ -94,7 +94,7 @@ export function applyMarkTreeToHTMLDOM(markRootNode, DOMRootNode, text) {
       if (markChild.markData.hasTag) {
         const childDOMNode = document.createElement(markChild.markData.tag);
         if (markChild.markData.htmlAttribute !== null) {
-          for(attr of markChild.markData.htmlAttribute) {
+          for(const attr of markChild.markData.htmlAttribute) {
             childDOMNode.setAttribute(attr.name, attr.value);
           }
         }

@@ -29,6 +29,7 @@ export function createMarkTree(textContent) {
   const [resultEditorList, resultHTMLList] = [[], []];
   const lines = textContent.split("\n");
   const applyLinePattern = new Array(lines.length).fill(true);
+  const ignoreStringPattern = new Array(lines.length).fill([]);
   const paragraphSep = [-1, lines.length];
   const lineOffsetDB = [0];
   function addMarkData(lo, hi, markData) {
@@ -287,13 +288,61 @@ export function createMarkTree(textContent) {
   }
   scanTablePattern();
 
+  function scanImagePatternInLine(row) {
+    const line = lines[row];
+    const regex = /\!\[([^\]]+)\]\(([^)]+)\)/g;
+    let match = null;
+    while((match = regex.exec(line)) !== null) {
+      const start = lineOffsetDB[row];
+      addMarkData(
+        start + match.index, start + match.index + match[0].length,
+        new MarkData({
+          leftPatternLength: 2,
+          rightPatternLength: 3 + match[2].length,
+          tag: markDataDBimg.tag,
+          htmlAttribute: [
+            {name: 'alt', value: match[1]},
+            {name: 'src', value: match[2]},
+          ]
+        })
+      );
+      ignoreStringPattern[row].push({ lo: match.index, hi: match.index + match[0].length });
+    }
+  }
+  function scanLinkPatternInLine(row) {
+    const line = lines[row];
+    const regex = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g;
+    let match = null;
+    while((match = regex.exec(line)) !== null) {
+      const start = lineOffsetDB[row];
+      addMarkData(
+        start + match.index, start + match.index + match[0].length,
+        new MarkData({
+          leftPatternLength: 1,
+          rightPatternLength: 3 + match[2].length,
+          tag: markDataDBlink.tag,
+          htmlAttribute: [
+            {name: 'title', value: match[1]}, 
+            {name: 'href', value: match[2]},
+          ]
+        })
+      );
+      ignoreStringPattern[row].push({ lo: match.index, hi: match.index + match[0].length });
+    }
+  }
   function scanDoublePatternInLine(row) {
     const line = lines[row];
     const stk = [];
+    const skipRange = new Array(line.length).fill(false);
     class Item {
       constructor(pos, markData) {
         this.pos = pos;
         this.markData = markData;
+      }
+    }
+    function createSkipRange() {
+      for (const range of ignoreStringPattern) {
+        skipRange.fill(true, range.lo, range.hi);
       }
     }
     function findMatch(item) {
@@ -335,7 +384,11 @@ export function createMarkTree(textContent) {
       return matched;
     }
 
+    createSkipRange();
     for (let i = 0; i < line.length; i++) {
+      if(skipRange[i]){
+        continue;
+      }
       if (line[i] === markPatternDBComment.pattern && i < line.length - 1) {
         function isSpecialCharacter(char) {
           return /[!@#$%^&*(),.?":{}|<>~\`\+\=\-\_\[\]\/\'\|\\]/.test(char);
@@ -395,46 +448,6 @@ export function createMarkTree(textContent) {
           }
         }
       }
-    }
-  }
-  function scanImagePatternInLine(row) {
-    const line = lines[row];
-    const regex = /\!\[([^\]]+)\]\(([^)]+)\)/g;
-    let match = null;
-    while((match = regex.exec(line)) !== null) {
-      const lo = lineOffsetDB[row];
-      addMarkData(
-        lo + match.index, lo + match.index + match[0].length,
-        new MarkData({
-          leftPatternLength: 2,
-          rightPatternLength: 3 + match[2].length,
-          tag: markDataDBimg.tag,
-          htmlAttribute: [
-            {name: 'alt', value: match[1]},
-            {name: 'src', value: match[2]},
-          ]
-        })
-      );
-    }
-  }
-  function scanLinkPatternInLine(row) {
-    const line = lines[row];
-    const regex = /(?<!!)\[([^\]]+)\]\(([^)]+)\)/g;
-    let match = null;
-    while((match = regex.exec(line)) !== null) {
-      const lo = lineOffsetDB[row];
-      addMarkData(
-        lo + match.index, lo + match.index + match[0].length,
-        new MarkData({
-          leftPatternLength: 1,
-          rightPatternLength: 3 + match[2].length,
-          tag: markDataDBlink.tag,
-          htmlAttribute: [
-            {name: 'title', value: match[1]}, 
-            {name: 'href', value: match[2]},
-          ]
-        })
-      );
     }
   }
   function scanSingleLine(row) {
